@@ -1,0 +1,2 @@
+{% extends 'base.html' %}{% block title %}{{ item.title }} — HY ARCHIVE{% endblock %}{% block content %}<main class="page detail"><p class="eyebrow">ARCHIVE / {{ item.category }}</p><h1 class="page-title">{{ item.title }}</h1><p class="lead">{{ item.summary }}</p><article class="prose">{{ item.content }}</article><a class="button" href="{{ url_for('archive') }}">← BACK TO ARCHIVE</a></main>{% endblock %}
+
