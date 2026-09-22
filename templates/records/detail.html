@@ -4,7 +4,7 @@
 {% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/records.css') }}">{% endblock %}
 {% block content %}
 <main class="record-detail">
-  <a class="record-back" href="{{ url_for('records') }}">← 기록 목록</a>
+  <a class="record-back" href="{{ back_url|default(url_for('records')) }}">← {{ back_label|default('기록 목록') }}</a>
   <header class="record-hero">
     <p class="eyebrow">{{ record.category }}{% if record.is_featured %} · FEATURED{% endif %}</p>
     <h1>{{ record.title }}</h1>

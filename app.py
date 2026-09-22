@@ -2,7 +2,7 @@ from pathlib import Path
 from uuid import uuid4
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file, abort
 import markdown
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, or_, text
 from werkzeug.utils import secure_filename
 from config import Config
 from models import db, Profile, Project, Experience, Skill, Archive, RecordComment
@@ -14,13 +14,15 @@ Path(app.instance_path).mkdir(parents=True, exist_ok=True)
 RECORD_UPLOAD_DIR = Path(app.static_folder) / "uploads" / "records"
 RECORD_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
+BLOG_CATEGORIES = ["맛집 · 카페", "여행", "사주 연구", "독서 모임"]
+ARCHIVE_CATEGORIES = ["AI / ML", "DATA", "DEVELOPMENT", "PROJECT", "LECTURE", "CERTIFICATION", "WORK", "THINKING"]
 db.init_app(app)
 
 with app.app_context():
     db.create_all()
     # create_all() does not add columns to an existing SQLite table.
     existing = {column["name"] for column in inspect(db.engine).get_columns("archive")}
-    record_columns = {"tags": "VARCHAR(400)", "thumbnail": "VARCHAR(400)", "source_type": "VARCHAR(80)", "source_url": "VARCHAR(400)", "is_featured": "BOOLEAN NOT NULL DEFAULT 0", "is_pinned": "BOOLEAN NOT NULL DEFAULT 0", "view_count": "INTEGER NOT NULL DEFAULT 0", "like_count": "INTEGER NOT NULL DEFAULT 0", "recommendation_count": "INTEGER NOT NULL DEFAULT 0"}
+    record_columns = {"content_type": "VARCHAR(40) NOT NULL DEFAULT 'archive'", "tags": "VARCHAR(400)", "thumbnail": "VARCHAR(400)", "source_type": "VARCHAR(80)", "source_url": "VARCHAR(400)", "is_featured": "BOOLEAN NOT NULL DEFAULT 0", "is_pinned": "BOOLEAN NOT NULL DEFAULT 0", "view_count": "INTEGER NOT NULL DEFAULT 0", "like_count": "INTEGER NOT NULL DEFAULT 0", "recommendation_count": "INTEGER NOT NULL DEFAULT 0"}
     for name, definition in record_columns.items():
         if name not in existing:
             db.session.execute(text(f"ALTER TABLE archive ADD COLUMN {name} {definition}"))
@@ -39,7 +41,7 @@ with app.app_context():
 
 @app.context_processor
 def globals_for_templates():
-    return {"profile": Profile.query.first(), "project_count": Project.query.count(), "archive_count": Archive.query.count(), "skill_count": Skill.query.count()}
+    return {"profile": Profile.query.first(), "project_count": Project.query.count(), "archive_count": Archive.query.filter_by(content_type="archive").count(), "skill_count": Skill.query.count(), "blog_categories": BLOG_CATEGORIES, "archive_categories": ARCHIVE_CATEGORIES}
 
 @app.route("/profile-image")
 def profile_image():
@@ -49,7 +51,7 @@ def profile_image():
 
 @app.route("/")
 def home():
-    return render_template("home-reference.html", projects=Project.query.order_by(Project.id).all(), experiences=Experience.query.order_by(Experience.sort_order).all(), skills=Skill.query.order_by(Skill.category, Skill.sort_order).all(), archives=Archive.query.order_by(Archive.created_at.desc()).limit(5).all())
+    return render_template("home-reference.html", projects=Project.query.order_by(Project.id).all(), experiences=Experience.query.order_by(Experience.sort_order).all(), skills=Skill.query.order_by(Skill.category, Skill.sort_order).all(), archives=Archive.query.filter_by(content_type="archive").order_by(Archive.created_at.desc()).limit(5).all())
 
 @app.route("/projects")
 def projects(): return render_template("projects/list.html", projects=Project.query.order_by(Project.id).all())
@@ -62,12 +64,21 @@ def project_detail(project_id):
 @app.route("/archive")
 def archive():
     category = request.args.get("category", "ALL")
-    query = Archive.query.order_by(Archive.created_at.desc())
+    query = Archive.query.filter_by(content_type="archive").order_by(Archive.created_at.desc())
     if category != "ALL": query = query.filter_by(category=category)
     return render_template("archive/list.html", archives=query.all(), category=category)
 
 @app.route("/archive/<int:archive_id>")
-def archive_detail(archive_id): return render_template("archive/detail.html", item=Archive.query.get_or_404(archive_id))
+def archive_detail(archive_id):
+    record = Archive.query.filter_by(content_type="archive", id=archive_id).first_or_404()
+    record.view_count += 1; db.session.commit()
+    rendered_content = markdown.markdown(record.content or "", extensions=["extra", "fenced_code", "tables"])
+    return render_template("records/detail.html", record=record, rendered_content=rendered_content, back_url=url_for("archive"), back_label="아카이브")
+
+def content_detail_url(record):
+    if record.content_type == "blog": return url_for("blog_detail", record_id=record.id)
+    if record.content_type == "archive": return url_for("archive_detail", archive_id=record.id)
+    return url_for("record_detail", record_id=record.id)
 
 def record_query():
     sort = request.args.get("sort", "latest")
@@ -82,6 +93,28 @@ def record_query():
 def records():
     query, category, sort = record_query()
     return render_template("records/list.html", records=query.all(), category=category, sort=sort)
+
+@app.route("/blog")
+def blog():
+    category = request.args.get("category", "ALL")
+    search = request.args.get("q", "").strip()
+    query = Archive.query.filter_by(content_type="blog").order_by(Archive.is_pinned.desc(), Archive.created_at.desc())
+    if category != "ALL":
+        query = query.filter_by(category=category)
+    if search:
+        keyword = f"%{search}%"
+        query = query.filter(or_(Archive.title.ilike(keyword), Archive.summary.ilike(keyword), Archive.content.ilike(keyword), Archive.tags.ilike(keyword)))
+    categories = BLOG_CATEGORIES
+    posts = query.all()
+    featured = next((post for post in posts if post.is_featured or post.thumbnail), posts[0] if posts else None)
+    return render_template("blog/list.html", posts=posts, featured=featured, categories=categories, category=category, search=search)
+
+@app.route("/blog/<int:record_id>")
+def blog_detail(record_id):
+    record = Archive.query.filter_by(content_type="blog", id=record_id).first_or_404()
+    record.view_count += 1; db.session.commit()
+    rendered_content = markdown.markdown(record.content or "", extensions=["extra", "fenced_code", "tables"])
+    return render_template("records/detail.html", record=record, rendered_content=rendered_content, back_url=url_for("blog"), back_label="블로그")
 
 def save_record_image(image):
     if not image or not image.filename:
@@ -104,18 +137,25 @@ def remove_record_image(image_url):
 
 @app.route("/records/new", methods=["GET", "POST"])
 def new_record():
+    content_type = request.args.get("type", "archive").lower()
+    if content_type not in {"archive", "blog"}: content_type = "archive"
     if request.method == "POST":
+        content_type = request.form.get("content_type", "archive").lower()
+        if content_type not in {"archive", "blog"}: content_type = "archive"
+        allowed_categories = BLOG_CATEGORIES if content_type == "blog" else ARCHIVE_CATEGORIES
+        category = request.form.get("category", allowed_categories[0])
+        if category not in allowed_categories: category = allowed_categories[0]
         if not request.form.get("title", "").strip() or not request.form.get("content", "").strip():
             flash("Title과 Content는 필수입니다.", "error")
-            return render_template("records/form.html", record=None)
+            return render_template("records/form.html", record=None, content_type=content_type)
         try:
             thumbnail = save_record_image(request.files.get("thumbnail"))
         except ValueError as error:
             flash(str(error), "error")
-            return render_template("records/form.html", record=None)
-        record = Archive(title=request.form["title"].strip(), category=request.form.get("category", "THINKING"), summary=request.form.get("summary"), content=request.form["content"], tags=request.form.get("tags"), thumbnail=thumbnail, source_type=request.form.get("source_type"), source_url=request.form.get("source_url"), is_featured="is_featured" in request.form, is_pinned="is_pinned" in request.form)
-        db.session.add(record); db.session.commit(); return redirect(url_for("record_detail", record_id=record.id))
-    return render_template("records/form.html", record=None)
+            return render_template("records/form.html", record=None, content_type=content_type)
+        record = Archive(title=request.form["title"].strip(), category=category, summary=request.form.get("summary"), content=request.form["content"], content_type=content_type, tags=request.form.get("tags"), thumbnail=thumbnail, source_type=request.form.get("source_type"), source_url=request.form.get("source_url"), is_featured="is_featured" in request.form, is_pinned="is_pinned" in request.form)
+        db.session.add(record); db.session.commit(); return redirect(content_detail_url(record))
+    return render_template("records/form.html", record=None, content_type=content_type)
 
 @app.route("/archive/new")
 def archive_new_redirect():
@@ -126,7 +166,7 @@ def record_detail(record_id):
     record = Archive.query.get_or_404(record_id)
     record.view_count += 1; db.session.commit()
     rendered_content = markdown.markdown(record.content or "", extensions=["extra", "fenced_code", "tables"])
-    return render_template("records/detail.html", record=record, rendered_content=rendered_content)
+    return render_template("records/detail.html", record=record, rendered_content=rendered_content, back_url=url_for("records"), back_label="기록 목록")
 
 @app.post("/records/<int:record_id>/like")
 def like_record(record_id):
@@ -152,19 +192,24 @@ def recommend_record(record_id):
 
 @app.post("/records/<int:record_id>/comments")
 def add_comment(record_id):
-    Archive.query.get_or_404(record_id)
+    record = Archive.query.get_or_404(record_id)
     author = request.form.get("author", "Anonymous").strip() or "Anonymous"
     content = request.form.get("content", "").strip()
     if content:
         db.session.add(RecordComment(record_id=record_id, author=author, content=content)); db.session.commit()
-    return redirect(url_for("record_detail", record_id=record_id) + "#comments")
+    return redirect(content_detail_url(record) + "#comments")
 
 @app.route("/records/<int:record_id>/edit", methods=["GET", "POST"])
 def edit_record(record_id):
     record = Archive.query.get_or_404(record_id)
     if request.method == "POST":
-        for field in ["title", "category", "summary", "content", "tags", "source_type", "source_url"]:
+        for field in ["title", "summary", "content", "tags", "source_type", "source_url"]:
             setattr(record, field, request.form.get(field))
+        requested_type = request.form.get("content_type", record.content_type).lower()
+        record.content_type = requested_type if requested_type in {"archive", "blog"} else record.content_type
+        allowed_categories = BLOG_CATEGORIES if record.content_type == "blog" else ARCHIVE_CATEGORIES
+        requested_category = request.form.get("category", record.category)
+        record.category = requested_category if requested_category in allowed_categories else allowed_categories[0]
         try:
             new_thumbnail = save_record_image(request.files.get("thumbnail"))
         except ValueError as error:
@@ -175,16 +220,17 @@ def edit_record(record_id):
         if new_thumbnail:
             remove_record_image(record.thumbnail); record.thumbnail = new_thumbnail
         record.is_featured = "is_featured" in request.form; record.is_pinned = "is_pinned" in request.form
-        db.session.commit(); return redirect(url_for("record_detail", record_id=record.id))
+        db.session.commit(); return redirect(content_detail_url(record))
     return render_template("records/form.html", record=record)
 
 @app.post("/records/<int:record_id>/delete")
 def delete_record(record_id):
     record = Archive.query.get_or_404(record_id)
+    content_type = record.content_type
     remove_record_image(record.thumbnail)
     db.session.delete(record); db.session.commit()
     flash("기록을 삭제했습니다.", "success")
-    return redirect(url_for("records"))
+    return redirect(url_for("blog" if content_type == "blog" else "archive" if content_type == "archive" else "records"))
 
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():

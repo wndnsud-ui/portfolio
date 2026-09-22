@@ -58,6 +58,7 @@ class Archive(TimestampMixin, db.Model):
     category = db.Column(db.String(80), nullable=False)
     summary = db.Column(db.Text)
     content = db.Column(db.Text)
+    content_type = db.Column(db.String(40), default="archive", nullable=False)
     tags = db.Column(db.String(400))
     thumbnail = db.Column(db.String(400))
     source_type = db.Column(db.String(80))

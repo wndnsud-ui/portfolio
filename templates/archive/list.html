@@ -1,1 +1,29 @@
-{% extends 'base.html' %}{% block title %}Archive — HY ARCHIVE{% endblock %}{% block content %}<main class="page"><div class="row"><div><p class="eyebrow">RECORD / KNOWLEDGE ARCHIVE</p><h1 class="page-title">Learn, think,<br><em>apply.</em></h1></div><a class="button dark" href="{{ url_for('new_record') }}">+ NEW RECORD</a></div><div class="filters">{% for cat in ['ALL','DATA','AI / ML','THINKING','PROJECT'] %}<a class="{% if category == cat %}active{% endif %}" href="{{ url_for('archive', category=cat) }}">{{ cat }}</a>{% endfor %}</div><div class="archive-list">{% for item in archives %}<a class="archive-row" href="{{ url_for('archive_detail', archive_id=item.id) }}"><span>{{ item.category }}</span><strong>{{ item.title }}<small>{{ item.summary }}</small></strong><time>{{ item.created_at.strftime('%Y.%m.%d') }}</time></a>{% else %}<p class="muted">아직 기록이 없습니다. 아래 버튼으로 첫 기록을 작성해보세요.</p><a class="button dark" href="{{ url_for('new_record') }}">+ WRITE FIRST RECORD</a>{% endfor %}</div></main>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Archive — HY{% endblock %}
+{% block body_class %}records-page record-list-page{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/records.css') }}">{% endblock %}
+{% block content %}
+<main class="records-index">
+  <header class="records-header">
+    <div><p class="eyebrow">KNOWLEDGE ARCHIVE</p><h1>아카이브</h1><p>공부하고 실험하며 쌓은 지식과 프로젝트 기록입니다.</p></div>
+    <a class="button dark" href="{{ url_for('new_record', type='archive') }}">새 기록 작성 <span>＋</span></a>
+  </header>
+  <nav class="record-filters" aria-label="아카이브 필터">
+    <a class="{% if category == 'ALL' %}active{% endif %}" href="{{ url_for('archive') }}">ALL</a>
+    {% for cat in archive_categories %}<a class="{% if category == cat %}active{% endif %}" href="{{ url_for('archive', category=cat) }}">{{ cat }}</a>{% endfor %}
+  </nav>
+  <section class="records-table">
+    {% for item in archives %}
+    <article class="record-row">
+      <span class="row-number">{{ '%02d'|format(loop.index) }}</span>
+      {% if item.thumbnail %}<a class="row-thumb" href="{{ url_for('archive_detail', archive_id=item.id) }}"><img src="{{ item.thumbnail }}" alt=""></a>{% endif %}
+      <span class="row-content"><small>{% if item.is_pinned %}PINNED · {% endif %}{{ item.category }}</small><strong><a href="{{ url_for('archive_detail', archive_id=item.id) }}">{{ item.title }}</a></strong>{% if item.summary %}<span>{{ item.summary }}</span>{% endif %}</span>
+      <span class="row-stats">♥ {{ item.like_count }}<br>★ {{ item.recommendation_count }} · 조회 {{ item.view_count }}</span>
+      <time>{{ item.created_at.strftime('%Y.%m.%d') }}</time>
+      <span class="row-actions"><a href="{{ url_for('edit_record', record_id=item.id) }}">수정</a><form method="post" action="{{ url_for('delete_record', record_id=item.id) }}" onsubmit="return confirm('이 기록을 삭제할까요? 삭제 후에는 복구할 수 없습니다.');"><button type="submit">삭제</button></form></span>
+      <a class="row-arrow" href="{{ url_for('archive_detail', archive_id=item.id) }}" aria-label="{{ item.title }} 상세 보기">↗</a>
+    </article>
+    {% else %}<div class="records-empty"><p>아직 아카이브 기록이 없습니다.</p><a class="button dark" href="{{ url_for('new_record', type='archive') }}">첫 기록 작성</a></div>{% endfor %}
+  </section>
+</main>
+{% endblock %}

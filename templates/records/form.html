@@ -20,11 +20,17 @@
         <input id="record-title" name="title" required autofocus placeholder="기록의 제목을 입력하세요" value="{{ record.title if record else '' }}">
       </div>
 
-      <div class="field-row">
+      <div class="field-row publishing-row">
+        <div class="field">
+          <label for="content-type">게시 위치</label>
+          {% set selected_type = record.content_type if record else content_type %}
+          {% set category_options = blog_categories if selected_type == 'blog' else archive_categories %}
+          <select id="content-type" name="content_type"><option value="archive" {% if selected_type == 'archive' %}selected{% endif %}>ARCHIVE</option><option value="blog" {% if selected_type == 'blog' %}selected{% endif %}>BLOG</option></select>
+        </div>
         <div class="field">
           <label for="record-category">카테고리</label>
-          <select id="record-category" name="category">
-            {% for cat in ['AI / ML','DATA','DEVELOPMENT','PROJECT','LECTURE','CERTIFICATION','WORK','THINKING'] %}
+          <select id="record-category" name="category" data-selected="{{ record.category if record else '' }}">
+            {% for cat in category_options %}
             <option {% if record and record.category == cat %}selected{% endif %}>{{ cat }}</option>
             {% endfor %}
           </select>
@@ -85,4 +91,12 @@
     </footer>
   </form>
 </main>
+<script>
+  const contentTypeSelect = document.querySelector('#content-type');
+  const categorySelect = document.querySelector('#record-category');
+  const categorySets = {{ {'archive': archive_categories, 'blog': blog_categories}|tojson }};
+  contentTypeSelect?.addEventListener('change', () => {
+    categorySelect.replaceChildren(...categorySets[contentTypeSelect.value].map((category) => new Option(category, category)));
+  });
+</script>
 {% endblock %}

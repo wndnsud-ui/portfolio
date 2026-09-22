@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block title %}Blog — HY{% endblock %}
+{% block body_class %}blog-page{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/blog.css') }}">{% endblock %}
+{% block content %}
+<main class="blog-shell">
+  <header class="blog-header">
+    <div><p class="eyebrow">HY / BLOG</p><h1>좋아하는 장소와 여행,<br>오래 들여다본 생각들.</h1></div>
+    <p>예쁜 공간과 맛있는 순간, 여행의 장면, 사주 연구와 독서 모임에서 발견한 이야기를 기록합니다.</p>
+  </header>
+
+  <section class="blog-tools" aria-label="블로그 검색 및 필터">
+    <form class="blog-search" method="get" action="{{ url_for('blog') }}">
+      {% if category != 'ALL' %}<input type="hidden" name="category" value="{{ category }}">{% endif %}
+      <input type="search" name="q" value="{{ search }}" placeholder="제목, 내용, 태그 검색" aria-label="블로그 검색">
+      <button type="submit" aria-label="검색">⌕</button>
+    </form>
+    <nav class="blog-categories">
+      <a class="{% if category == 'ALL' %}active{% endif %}" href="{{ url_for('blog', q=search) }}">ALL</a>
+      {% for item in categories %}<a class="{% if category == item %}active{% endif %}" href="{{ url_for('blog', category=item, q=search) }}">{{ item }}</a>{% endfor %}
+    </nav>
+  </section>
+
+  {% if featured and not search and category == 'ALL' %}
+  <section class="featured-post" aria-labelledby="featured-title">
+    <a class="featured-image" href="{{ url_for('blog_detail', record_id=featured.id) }}">
+      {% if featured.thumbnail %}<img src="{{ featured.thumbnail }}" alt="{{ featured.title }} 대표 이미지">{% else %}<span>HY<br>THINKING</span>{% endif %}
+    </a>
+    <div class="featured-copy"><p class="post-meta">FEATURED · {{ featured.category }}</p><h2 id="featured-title"><a href="{{ url_for('blog_detail', record_id=featured.id) }}">{{ featured.title }}</a></h2><p>{{ featured.summary or (featured.content|striptags|truncate(170)) }}</p><div><time>{{ featured.created_at.strftime('%Y.%m.%d') }}</time><a href="{{ url_for('blog_detail', record_id=featured.id) }}">READ ARTICLE ↗</a></div></div>
+  </section>
+  {% endif %}
+
+  <section class="blog-posts" aria-labelledby="latest-title">
+    <div class="blog-section-head"><h2 id="latest-title">{{ '검색 결과' if search else 'Latest writing' }}</h2><span>{{ posts|length }} POSTS</span></div>
+    <div class="post-grid">
+      {% for post in posts %}
+      <article class="post-card">
+        <a class="post-image" href="{{ url_for('blog_detail', record_id=post.id) }}">{% if post.thumbnail %}<img src="{{ post.thumbnail }}" alt="">{% else %}<span>{{ '%02d'|format(loop.index) }}</span>{% endif %}</a>
+        <div class="post-card-copy"><p class="post-meta">{{ post.category }}{% if post.source_type %} · {{ post.source_type|upper }}{% endif %}</p><h3><a href="{{ url_for('blog_detail', record_id=post.id) }}">{{ post.title }}</a></h3><p>{{ post.summary or (post.content|striptags|truncate(110)) }}</p><footer><time>{{ post.created_at.strftime('%Y.%m.%d') }}</time><span>♥ {{ post.like_count }} · ★ {{ post.recommendation_count }}</span></footer></div>
+      </article>
+      {% else %}<div class="blog-empty"><h2>{{ '검색 결과가 없습니다.' if search or category != 'ALL' else '첫 번째 이야기를 기다리고 있어요.' }}</h2><p>{{ '다른 검색어나 카테고리를 선택해보세요.' if search or category != 'ALL' else '좋아하는 장소와 생각을 블로그에 남겨보세요.' }}</p><a href="{{ url_for('new_record', type='blog') }}">첫 글 작성하기</a></div>{% endfor %}
+    </div>
+  </section>
+
+  <aside class="blog-write"><p>새로운 생각을 기록할 준비가 되었나요?</p><a href="{{ url_for('new_record', type='blog') }}">WRITE A NEW POST ↗</a></aside>
+</main>
+{% endblock %}

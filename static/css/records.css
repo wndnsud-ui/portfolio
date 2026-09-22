@@ -5,7 +5,7 @@
 .editor-header .eyebrow{margin-bottom:12px}.editor-header h1{margin:0;font-size:clamp(2.15rem,5vw,3.6rem);line-height:1.05;letter-spacing:-.06em}.editor-header>div>p:last-child{margin:14px 0 0;color:#74766f;font-size:.92rem}
 .editor-back{flex:none;padding-bottom:4px;border-bottom:1px solid #898d7f;font-size:.72rem;font-weight:700}.editor-back span{margin-left:14px}
 .record-form{display:grid;gap:20px}.editor-card{padding:10px 34px 6px;background:#fff;border:1px solid #dddacf;border-radius:8px;box-shadow:0 16px 45px rgba(50,48,42,.045)}
-.field{min-width:0;padding:24px 0;border-bottom:1px solid #e7e4dc}.field-row{display:grid;grid-template-columns:minmax(180px,.65fr) minmax(0,1.35fr);gap:28px}.field-row>.field{border-bottom:1px solid #e7e4dc}
+.field{min-width:0;padding:24px 0;border-bottom:1px solid #e7e4dc}.field-row{display:grid;grid-template-columns:minmax(180px,.65fr) minmax(0,1.35fr);gap:28px}.publishing-row{grid-template-columns:minmax(145px,.5fr) minmax(160px,.65fr) minmax(0,1.35fr)}.field-row>.field{border-bottom:1px solid #e7e4dc}
 .field label,.field-label-row label{display:block;margin-bottom:10px;color:#555950;font-size:.73rem;font-weight:700}.field label span,.field-label-row label span{color:#9a665e}
 .field input,.field select,.field textarea{width:100%;margin:0;padding:0;border:0;outline:0;background:transparent;color:#20231f;font:inherit;line-height:1.65;resize:vertical}
 .field input::placeholder,.field textarea::placeholder{color:#aaa9a3}.field select{height:34px;cursor:pointer}.field-title input{font-size:1.4rem;font-weight:600}.field textarea{min-height:72px}
