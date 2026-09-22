@@ -66,6 +66,7 @@ class Archive(TimestampMixin, db.Model):
     is_pinned = db.Column(db.Boolean, default=False, nullable=False)
     view_count = db.Column(db.Integer, default=0, nullable=False)
     like_count = db.Column(db.Integer, default=0, nullable=False)
+    recommendation_count = db.Column(db.Integer, default=0, nullable=False)
     comments = db.relationship("RecordComment", backref="record", cascade="all, delete-orphan", lazy=True)
 
 class RecordComment(TimestampMixin, db.Model):

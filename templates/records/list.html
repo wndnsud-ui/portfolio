@@ -1,1 +1,23 @@
-{% extends 'base.html' %}{% block title %}Records — HY ARCHIVE{% endblock %}{% block content %}<main class="page"><div class="row"><div><p class="eyebrow">RECORDS / KNOWLEDGE ARCHIVE</p><h1 class="page-title">Read.<br><em>Write. Accumulate.</em></h1></div><a class="button dark" href="{{ url_for('new_record') }}">+ NEW RECORD</a></div><div class="filters">{% for cat in ['ALL','AI / ML','DATA','DEVELOPMENT','PROJECT','LECTURE','CERTIFICATION','WORK','THINKING'] %}<a class="{% if category == cat %}active{% endif %}" href="{{ url_for('records', category=cat, sort=sort) }}">{{ cat }}</a>{% endfor %}<a class="{% if sort == 'popular' %}active{% endif %}" href="{{ url_for('records', category=category, sort='popular') }}">POPULAR</a></div><div class="archive-list">{% for item in records %}<a class="archive-row" href="{{ url_for('record_detail', record_id=item.id) }}"><span>{% if item.is_pinned %}PINNED · {% endif %}{{ item.category }}</span><strong>{{ item.title }}{% if item.summary %}<small>{{ item.summary }}</small>{% endif %}</strong><time>♥ {{ item.like_count }} · {{ item.view_count }} views<br>{{ item.created_at.strftime('%Y.%m.%d') }}</time></a>{% else %}<p class="muted">아직 기록이 없습니다. 첫 번째 Record를 작성해보세요.</p>{% endfor %}</div></main>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Records — HY ARCHIVE{% endblock %}
+{% block body_class %}records-page record-list-page{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/records.css') }}">{% endblock %}
+{% block content %}
+<main class="records-index">
+  <header class="records-header"><div><p class="eyebrow">KNOWLEDGE ARCHIVE</p><h1>기록</h1><p>배우고 생각하고 적용한 과정을 모았습니다.</p></div><a class="button dark" href="{{ url_for('new_record') }}">새 기록 작성 <span>＋</span></a></header>
+  <nav class="record-filters" aria-label="기록 필터">{% for cat in ['ALL','AI / ML','DATA','DEVELOPMENT','PROJECT','LECTURE','CERTIFICATION','WORK','THINKING'] %}<a class="{% if category == cat %}active{% endif %}" href="{{ url_for('records', category=cat, sort=sort) }}">{{ cat }}</a>{% endfor %}<a class="{% if sort == 'popular' %}active{% endif %}" href="{{ url_for('records', category=category, sort='popular') }}">POPULAR</a></nav>
+  <section class="records-table">
+    {% for item in records %}
+    <article class="record-row">
+      <span class="row-number">{{ '%02d'|format(loop.index) }}</span>
+      {% if item.thumbnail %}<a class="row-thumb" href="{{ url_for('record_detail', record_id=item.id) }}"><img src="{{ item.thumbnail }}" alt=""></a>{% endif %}
+      <span class="row-content"><small>{% if item.is_pinned %}PINNED · {% endif %}{{ item.category }}</small><strong><a href="{{ url_for('record_detail', record_id=item.id) }}">{{ item.title }}</a></strong>{% if item.summary %}<span>{{ item.summary }}</span>{% endif %}</span>
+      <span class="row-stats">♥ {{ item.like_count }}<br>★ {{ item.recommendation_count }} · 조회 {{ item.view_count }}</span>
+      <time>{{ item.created_at.strftime('%Y.%m.%d') }}</time>
+      <span class="row-actions"><a href="{{ url_for('edit_record', record_id=item.id) }}">수정</a><form method="post" action="{{ url_for('delete_record', record_id=item.id) }}" onsubmit="return confirm('이 기록을 삭제할까요? 삭제 후에는 복구할 수 없습니다.');"><button type="submit">삭제</button></form></span>
+      <a class="row-arrow" href="{{ url_for('record_detail', record_id=item.id) }}" aria-label="{{ item.title }} 상세 보기">↗</a>
+    </article>
+    {% else %}<p class="records-empty">아직 기록이 없습니다. 첫 번째 기록을 작성해보세요.</p>{% endfor %}
+  </section>
+</main>
+{% endblock %}

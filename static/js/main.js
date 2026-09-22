@@ -1,8 +1,16 @@
-const toggle=document.querySelector('.menu-toggle');const nav=document.querySelector('nav');if(toggle){toggle.addEventListener('click',()=>{nav.style.display=nav.style.display==='flex'?'none':'flex';nav.style.flexDirection='column';nav.style.position='absolute';nav.style.top='64px';nav.style.right='6vw';nav.style.background='var(--surface)';nav.style.padding='1rem';nav.style.border='1px solid var(--border)';nav.style.borderRadius='12px'})}document.querySelectorAll('.toast').forEach(el=>setTimeout(()=>el.remove(),3000));
-const recordsLink=document.createElement('a');recordsLink.href='/records';recordsLink.textContent='RECORDS';const writeLink=document.createElement('a');writeLink.href='/records/new';writeLink.textContent='WRITE';if(nav){nav.insertBefore(recordsLink,nav.children[2]||null);nav.appendChild(writeLink)}
-if(location.pathname==='/'&&!document.querySelector('link[data-home-style]')){const style=document.createElement('link');style.rel='stylesheet';style.href='/static/css/home.css';style.dataset.homeStyle='true';document.head.appendChild(style)}
-if(nav){[...nav.querySelectorAll('a')].forEach(link=>{if(link.textContent.trim()==='ARCHIVE')link.remove();if(link.textContent.trim()==='WRITE'){link.classList.add('nav-write');link.textContent='WRITE ↗'}});if(![...nav.querySelectorAll('a')].some(link=>link.textContent.trim()==='READING')){const reading=document.createElement('a');reading.href='/archive';reading.textContent='READING';nav.insertBefore(reading,nav.lastElementChild)}}
-if(location.pathname==='/'&&!document.querySelector('link[data-revised-home-style]')){const style=document.createElement('link');style.rel='stylesheet';style.href='/static/css/home-revised.css';style.dataset.revisedHomeStyle='true';document.head.appendChild(style)}
-if(location.pathname==='/'&&!document.querySelector('link[data-reference-home-style]')){const style=document.createElement('link');style.rel='stylesheet';style.href='/static/css/home-reference.css';style.dataset.referenceHomeStyle='true';document.head.appendChild(style)}
-if(location.pathname==='/'&&!document.querySelector('link[data-home-font]')){const font=document.createElement('link');font.rel='stylesheet';font.href='https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap';font.dataset.homeFont='true';document.head.appendChild(font)}
-if(nav){[...nav.querySelectorAll('a')].forEach(link=>{if(['RECORDS','READING','WRITE ↗','WRITE'].includes(link.textContent.trim()))link.remove()})}
+const toggle = document.querySelector('.menu-toggle');
+const nav = document.querySelector('.site-header nav');
+
+if (toggle && nav) {
+  toggle.addEventListener('click', () => {
+    const isOpen = nav.classList.toggle('is-open');
+    toggle.setAttribute('aria-expanded', String(isOpen));
+  });
+  nav.querySelectorAll('a').forEach((link) => {
+    link.addEventListener('click', () => nav.classList.remove('is-open'));
+  });
+}
+
+document.querySelectorAll('.toast').forEach((toast) => {
+  setTimeout(() => toast.remove(), 3000);
+});

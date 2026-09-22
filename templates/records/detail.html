@@ -1,1 +1,37 @@
-{% extends 'base.html' %}{% block title %}{{ record.title }} — HY ARCHIVE{% endblock %}{% block content %}<main class="page detail"><p class="eyebrow">RECORD / {{ record.category }}{% if record.is_featured %} / FEATURED{% endif %}</p><h1 class="page-title">{{ record.title }}</h1><p class="lead">{{ record.summary }}</p><div class="record-meta">{{ record.created_at.strftime('%Y.%m.%d') }} · {{ record.view_count }} views · {{ record.like_count }} likes</div><article class="prose markdown-body">{{ rendered_content|safe }}</article><div class="record-actions"><form method="post" action="{{ url_for('like_record', record_id=record.id) }}"><button class="button" type="submit">♥ LIKE {{ record.like_count }}</button></form><a class="button" href="{{ url_for('edit_record', record_id=record.id) }}">EDIT</a></div>{% if record.source_url %}<p class="source-link">Source: <a href="{{ record.source_url }}" target="_blank" rel="noreferrer">{{ record.source_url }} ↗</a></p>{% endif %}<section id="comments" class="comments"><p class="eyebrow">COMMENTS</p><h2>{{ record.comments|length }} thoughts</h2>{% for comment in record.comments|sort(attribute='created_at', reverse=true) %}<div class="comment"><strong>{{ comment.author }}</strong><span>{{ comment.created_at.strftime('%Y.%m.%d') }}</span><p>{{ comment.content }}</p></div>{% endfor %}<form method="post" action="{{ url_for('add_comment', record_id=record.id) }}" class="comment-form"><input name="author" placeholder="Your name"><textarea name="content" rows="3" required placeholder="Leave a thought..."></textarea><button class="button dark" type="submit">ADD COMMENT</button></form></section></main>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}{{ record.title }} — HY ARCHIVE{% endblock %}
+{% block body_class %}records-page record-detail-page{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/records.css') }}">{% endblock %}
+{% block content %}
+<main class="record-detail">
+  <a class="record-back" href="{{ url_for('records') }}">← 기록 목록</a>
+  <header class="record-hero">
+    <p class="eyebrow">{{ record.category }}{% if record.is_featured %} · FEATURED{% endif %}</p>
+    <h1>{{ record.title }}</h1>
+    {% if record.summary %}<p class="record-lead">{{ record.summary }}</p>{% endif %}
+    <div class="record-meta"><time>{{ record.created_at.strftime('%Y.%m.%d') }}</time><span>조회 {{ record.view_count }}</span><span>좋아요 {{ record.like_count }}</span><span>추천 {{ record.recommendation_count }}</span></div>
+  </header>
+
+  {% if record.thumbnail %}<figure class="record-cover"><img src="{{ record.thumbnail }}" alt="{{ record.title }} 대표 이미지"></figure>{% endif %}
+  <article class="record-content markdown-body">{{ rendered_content|safe }}</article>
+
+  {% if record.tags %}<div class="record-tags">{% for tag in record.tags.split(',') %}<span>#{{ tag.strip() }}</span>{% endfor %}</div>{% endif %}
+  {% if record.source_url %}<p class="source-link">SOURCE <a href="{{ record.source_url }}" target="_blank" rel="noreferrer">{{ record.source_url }} ↗</a></p>{% endif %}
+
+  <section class="engagement-bar" aria-label="기록 반응">
+    <form method="post" action="{{ url_for('like_record', record_id=record.id) }}"><button class="engagement-button{% if record.id in session.get('liked_records', []) %} active{% endif %}" type="submit"><span>♥</span> 좋아요 <b>{{ record.like_count }}</b></button></form>
+    <form method="post" action="{{ url_for('recommend_record', record_id=record.id) }}"><button class="engagement-button{% if record.id in session.get('recommended_records', []) %} active{% endif %}" type="submit"><span>★</span> 추천 <b>{{ record.recommendation_count }}</b></button></form>
+  </section>
+
+  <div class="record-manage">
+    <a class="button" href="{{ url_for('edit_record', record_id=record.id) }}">수정</a>
+    <form method="post" action="{{ url_for('delete_record', record_id=record.id) }}" onsubmit="return confirm('이 기록을 삭제할까요? 삭제 후에는 복구할 수 없습니다.');"><button class="button danger" type="submit">삭제</button></form>
+  </div>
+
+  <section id="comments" class="comments">
+    <p class="eyebrow">COMMENTS</p><h2>{{ record.comments|length }}개의 댓글</h2>
+    {% for comment in record.comments|sort(attribute='created_at', reverse=true) %}<article class="comment"><div><strong>{{ comment.author }}</strong><time>{{ comment.created_at.strftime('%Y.%m.%d') }}</time></div><p>{{ comment.content }}</p></article>{% endfor %}
+    <form method="post" action="{{ url_for('add_comment', record_id=record.id) }}" class="comment-form"><input name="author" placeholder="이름"><textarea name="content" rows="4" required placeholder="댓글을 남겨주세요."></textarea><button class="button dark" type="submit">댓글 등록</button></form>
+  </section>
+</main>
+{% endblock %}

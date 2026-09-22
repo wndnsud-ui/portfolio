@@ -1,18 +1,78 @@
 {% extends 'base.html' %}
-{% block title %}HY. Portfolio — Problems into Structures{% endblock %}
+{% block title %}최혜영 — Planning, Data & AI{% endblock %}
+{% block body_class %}home-page{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/home-reference.css') }}">{% endblock %}
 {% block content %}
-<main class="reference-home">
-  <section class="ref-hero">
-    <div class="ref-hero-left">
-      <p class="eyebrow">PORTFOLIO · RECORD · ARCHIVE</p>
-      <h1>Problems<br>into Structures,<br>Structures into <em>Results.</em></h1>
-      <p class="ref-description">문제를 발견하고, 복잡함을 구조화해<br>실행 가능한 결과로 만듭니다.</p>
-      <p class="ref-keywords">PLANNING · DATA · AI · AUTOMATION</p>
-      <section class="ref-how"><div class="ref-how-head"><span>HOW I WORK</span><i></i><small>문제에서, 결과까지.</small></div><div class="ref-process">{% for title,action,desc,keywords,icon in [('Problem','Define','문제를 발견하고, WHY를 찾고, 핵심을 정의합니다.','USER · NEEDS · ISSUE','⌕'),('Structure','Connect','데이터와 기능, 사람을 구조화하고 연결합니다.','DATA · LOGIC · FLOW','⊕'),('Result','Build','실행 가능한 결과로 구현하고, 가치를 만듭니다.','PRODUCT · IMPACT · GROWTH','↗')] %}<article><div class="ref-icon">{{ icon }}</div><small>0{{ loop.index }}</small><h2>{{ title }}<br><em>{{ action }}</em></h2><p>{{ desc }}</p><b>{{ keywords }}</b></article>{% if not loop.last %}<strong class="ref-arrow">→</strong>{% endif %}{% endfor %}<aside><q>“</q><p>조금씩 쌓아,<br>결과로 증명하는<br>사람이 되고 싶습니다.</p><span>—<br><br>LEARN · THINK · APPLY<br>KEEP GOING</span></aside></div></section>
+<main class="editorial-home">
+  <section class="home-section intro-section" id="about" aria-labelledby="intro-title">
+    <div class="intro-copy">
+      <p class="section-label">01 / INTRO</p>
+      <p class="person-name">HYEYOUNG CHOI</p>
+      <h1 id="intro-title">문제를 발견하고, <br>복잡한 정보를 구조화해 <br>실행 가능한 결과로 연결합니다.</h1>
+      <p class="intro-description">기술보다 먼저 문제를 보고, 필요한 정보와 데이터를 정리하며 결과까지 연결하는 과정을 중요하게 생각합니다.</p>
+      <p class="intro-fields">PLANNING · DATA · AI · DOCUMENTATION</p>
+      <a class="text-action" href="#projects">VIEW PROJECTS <span>↗</span></a>
     </div>
-    <aside class="ref-profile"><div class="ref-profile-image"><img src="{{ url_for('profile_image') }}" alt="최혜영 프로필 사진"></div><div class="ref-profile-info"><strong>HYEYOUNG<br>CHOI</strong><p>데이터와 AI로<br>일의 가능성을<br>확장하는 사람</p><span>PLANNER<br>DATA ANALYST<br>AI EXPLORER<br>PROBLEM SOLVER</span><i>Hy.</i><div><a class="button dark" href="#projects">VIEW PROJECTS ↗</a><a class="button" href="#about">◉ ABOUT ME</a></div></div></aside>
+    <figure class="profile-figure">
+      <div class="profile-image">
+        <img src="{{ url_for('profile_image') }}" onerror="this.onerror=null;this.src='{{ url_for('static', filename='images/hy.jpg') }}';" alt="최혜영 프로필 사진">
+      </div>
+      <figcaption><strong>HYEYOUNG CHOI</strong><span>Planning / Data / AI</span></figcaption>
+    </figure>
   </section>
-  <section id="projects" class="ref-projects"><div class="ref-section-title"><p class="eyebrow">SELECTED PROJECTS</p><a href="{{ url_for('projects') }}">SEE ALL PROJECTS →</a></div><div class="ref-project-grid">{% for project in projects[:3] %}<a href="{{ project.github_url if project.github_url and project.github_url != '#' else url_for('project_detail', project_id=project.id) }}" target="_blank" rel="noreferrer" class="ref-project"><span>0{{ loop.index }}</span><div class="ref-project-thumb art-{{ loop.index }}">{% if project.thumbnail %}<img src="{{ project.thumbnail }}" alt="{{ project.title }} 대표 이미지">{% else %}{{ 'MC' if loop.index == 1 else 'CD' }}{% endif %}</div><h2>{{ project.title }}</h2><h3>{{ project.subtitle }}</h3><p>{{ project.description }}</p><small>{{ project.tech_stack|replace(' / ', ' · ') }}</small><b>↗</b></a>{% endfor %}</div></section>
-  <section id="about" class="ref-lower"><p class="eyebrow">ARCHIVE / LEARN · THINK · APPLY</p><h2>Work, records,<br>and the thinking behind them.</h2><a class="button" href="{{ url_for('records') }}">READ RECORDS →</a></section>
+
+  <section class="home-section process-section" id="experience" aria-labelledby="process-title">
+    <header class="section-heading">
+      <p class="section-label">02 / HOW I WORK</p>
+      <h2 id="process-title">Problem → Structure → Result</h2>
+    </header>
+    <div class="process-list">
+      <article><span>01</span><h3>Problem</h3><p>무엇을 해결해야 하는지 관찰하고, 문제의 핵심과 WHY를 정의합니다.</p></article>
+      <article><span>02</span><h3>Structure</h3><p>흩어진 정보와 데이터를 기준에 따라 정리하고, 필요한 흐름을 설계합니다.</p></article>
+      <article><span>03</span><h3>Result</h3><p>실행 가능한 형태로 구현하고, 실제 결과와 배움을 다음 개선으로 연결합니다.</p></article>
+    </div>
+  </section>
+
+  <section class="home-section work-section" id="projects" aria-labelledby="work-title">
+    <header class="section-heading heading-row">
+      <div><p class="section-label">03 / SELECTED WORK</p><h2 id="work-title">주요 프로젝트</h2></div>
+      <a class="text-action" href="{{ url_for('projects') }}">VIEW ALL PROJECTS <span>↗</span></a>
+    </header>
+    <div class="project-list">
+      {% for project in projects[:3] %}
+      <article class="project-item">
+        <a class="project-thumb" href="{{ url_for('project_detail', project_id=project.id) }}" aria-label="{{ project.title }} 상세 보기">
+          {% if project.thumbnail %}<img src="{{ project.thumbnail }}" alt="{{ project.title }} 프로젝트 이미지">{% else %}<span>{{ project.title[:2] }}</span>{% endif %}
+        </a>
+        <span class="project-number">0{{ loop.index }}</span>
+        <div class="project-copy">
+          <h3><a href="{{ url_for('project_detail', project_id=project.id) }}">{{ project.title }}</a></h3>
+          {% if project.subtitle %}<p class="project-subtitle">{{ project.subtitle }}</p>{% endif %}
+          <p class="project-description">{{ project.description }}</p>
+          <span class="project-stack">{{ project.tech_stack|replace(' / ', ' · ') }}</span>
+        </div>
+        <a class="project-link" href="{{ url_for('project_detail', project_id=project.id) }}" aria-label="{{ project.title }} 상세 보기">↗</a>
+      </article>
+      {% else %}<p class="empty-state">프로젝트를 준비하고 있습니다.</p>{% endfor %}
+    </div>
+  </section>
+
+  <section class="home-section archive-section" aria-labelledby="archive-title">
+    <div class="archive-intro">
+      <p class="section-label">04 / THE THINKING BEHIND THE WORK</p>
+      <h2 id="archive-title">배우고 기록하고,<br>실제 문제에 적용한 생각들.</h2>
+      <a class="text-action" href="{{ url_for('records') }}">VIEW ARCHIVE <span>↗</span></a>
+    </div>
+    <div class="archive-list-home">
+      {% for item in archives[:3] %}
+      <a href="{{ url_for('record_detail', record_id=item.id) }}">
+        <span class="archive-category">{{ item.category }}</span>
+        <strong>{{ item.title }}</strong>
+        <time>{{ item.created_at.strftime('%Y.%m.%d') }}</time>
+        <b aria-hidden="true">↗</b>
+      </a>
+      {% else %}<p class="empty-state">새로운 기록을 준비하고 있습니다.</p>{% endfor %}
+    </div>
+  </section>
 </main>
 {% endblock %}

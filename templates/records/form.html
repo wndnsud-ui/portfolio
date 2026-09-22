@@ -1,1 +1,88 @@
-{% extends 'base.html' %}{% block title %}{{ 'Edit' if record else 'New' }} Record — HY ARCHIVE{% endblock %}{% block content %}<main class="page narrow"><p class="eyebrow">RECORDS / {{ 'EDIT' if record else 'WRITE' }}</p><h1 class="page-title">{{ 'Edit' if record else 'Write a new' }}<br><em>record.</em></h1><form method="post" class="record-form"><label>Title *<input name="title" required value="{{ record.title if record else '' }}"></label><label>Category<select name="category">{% for cat in ['AI / ML','DATA','DEVELOPMENT','PROJECT','LECTURE','CERTIFICATION','WORK','THINKING'] %}<option {% if record and record.category == cat %}selected{% endif %}>{{ cat }}</option>{% endfor %}</select></label><label>Summary<textarea name="summary" rows="2">{{ record.summary if record else '' }}</textarea></label><label>Tags<input name="tags" placeholder="data, validation, learning" value="{{ record.tags if record else '' }}"></label><label>Content *<textarea name="content" rows="16" required placeholder="Markdown으로 작성하세요.">{{ record.content if record else '' }}</textarea></label><div class="form-grid"><label>Source Type<select name="source_type"><option>study</option><option>lecture</option><option>project</option><option>experiment</option><option>work</option><option>thought</option></select></label><label>Source URL<input name="source_url" value="{{ record.source_url if record else '' }}"></label></div><label class="check"><input type="checkbox" name="is_featured" {% if record and record.is_featured %}checked{% endif %}> Featured recommendation</label><label class="check"><input type="checkbox" name="is_pinned" {% if record and record.is_pinned %}checked{% endif %}> Pin to top</label><button class="button dark" type="submit">SAVE RECORD ↗</button></form></main>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}{{ '기록 수정' if record else '새 기록' }} — HY ARCHIVE{% endblock %}
+{% block body_class %}record-editor-page{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/records.css') }}">{% endblock %}
+{% block content %}
+<main class="editor-page">
+  <header class="editor-header">
+    <div>
+      <p class="eyebrow">RECORDS / {{ 'EDIT' if record else 'WRITE' }}</p>
+      <h1>{{ '기록 수정' if record else '새 기록 작성' }}</h1>
+      <p>배운 것과 생각한 것을 차분히 남겨보세요.</p>
+    </div>
+    <a class="editor-back" href="{{ url_for('records') }}">목록으로 <span>↗</span></a>
+  </header>
+
+  <form method="post" enctype="multipart/form-data" class="record-form">
+    <section class="editor-card">
+      <div class="field field-title">
+        <label for="record-title">제목 <span>*</span></label>
+        <input id="record-title" name="title" required autofocus placeholder="기록의 제목을 입력하세요" value="{{ record.title if record else '' }}">
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="record-category">카테고리</label>
+          <select id="record-category" name="category">
+            {% for cat in ['AI / ML','DATA','DEVELOPMENT','PROJECT','LECTURE','CERTIFICATION','WORK','THINKING'] %}
+            <option {% if record and record.category == cat %}selected{% endif %}>{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field field-wide">
+          <label for="record-tags">태그</label>
+          <input id="record-tags" name="tags" placeholder="data, validation, learning" value="{{ record.tags if record else '' }}">
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="record-summary">요약</label>
+        <textarea id="record-summary" name="summary" rows="3" placeholder="목록에 표시할 짧은 설명을 입력하세요">{{ record.summary if record else '' }}</textarea>
+      </div>
+
+      <div class="field image-field">
+        <label for="record-thumbnail">대표 이미지</label>
+        {% if record and record.thumbnail %}
+        <div class="current-image"><img src="{{ record.thumbnail }}" alt="현재 대표 이미지"><label class="check"><input type="checkbox" name="remove_thumbnail"><span>현재 이미지 제거</span></label></div>
+        {% endif %}
+        <input id="record-thumbnail" type="file" name="thumbnail" accept="image/png,image/jpeg,image/gif,image/webp">
+        <small>PNG, JPG, GIF, WEBP · 최대 8MB</small>
+      </div>
+
+      <div class="field content-field">
+        <div class="field-label-row"><label for="record-content">본문 <span>*</span></label><small>Markdown 지원</small></div>
+        <textarea id="record-content" name="content" rows="18" required placeholder="내용을 작성하세요...">{{ record.content if record else '' }}</textarea>
+      </div>
+
+      <details class="source-panel" {% if record and record.source_url %}open{% endif %}>
+        <summary>출처 정보 <span>선택 사항</span></summary>
+        <div class="field-row source-fields">
+          <div class="field">
+            <label for="source-type">출처 유형</label>
+            <select id="source-type" name="source_type">
+              {% for source in ['study','lecture','project','experiment','work','thought'] %}
+              <option {% if record and record.source_type == source %}selected{% endif %}>{{ source }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field field-wide">
+            <label for="source-url">출처 URL</label>
+            <input id="source-url" type="url" name="source_url" placeholder="https://" value="{{ record.source_url if record else '' }}">
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <footer class="editor-actions">
+      <div class="editor-options">
+        <label class="check"><input type="checkbox" name="is_featured" {% if record and record.is_featured %}checked{% endif %}><span>추천 기록</span></label>
+        <label class="check"><input type="checkbox" name="is_pinned" {% if record and record.is_pinned %}checked{% endif %}><span>상단 고정</span></label>
+      </div>
+      <div class="action-buttons">
+        <a class="button" href="{{ url_for('records') }}">취소</a>
+        <button class="button dark" type="submit">{{ '수정 저장' if record else '기록 저장' }} <span>↗</span></button>
+      </div>
+    </footer>
+  </form>
+</main>
+{% endblock %}
