@@ -57,6 +57,39 @@ class TranscriptionFormatTests(unittest.TestCase):
         self.assertNotIn("timestamp_granularities", kwargs)
         self.assertEqual(transcript.segments[0].end, 12)
 
+    def test_large_audio_chunks_are_offset_and_merged(self) -> None:
+        endpoint = FakeTranscriptions(SimpleNamespace(
+            segments=[SimpleNamespace(start=2, end=4, text="hello")],
+            text="hello",
+        ))
+
+        class FakeOpenAI:
+            def __init__(self, api_key: str) -> None:
+                self.audio = SimpleNamespace(transcriptions=endpoint)
+
+        fake_module = types.ModuleType("openai")
+        fake_module.OpenAI = FakeOpenAI
+        with tempfile.NamedTemporaryFile(suffix=".m4a", delete=False) as audio:
+            path = Path(audio.name)
+        chunk_a = path.with_name("chunk-a.mp3")
+        chunk_b = path.with_name("chunk-b.mp3")
+        chunk_a.write_bytes(b"a")
+        chunk_b.write_bytes(b"b")
+        try:
+            with (
+                patch.dict(sys.modules, {"openai": fake_module}),
+                patch("pipeline.transcribe.MAX_DIRECT_UPLOAD_BYTES", 0),
+                patch("pipeline.transcribe._make_chunks", return_value=[(chunk_a, 0), (chunk_b, 2400)]),
+            ):
+                transcript = transcribe_audio(path, path.name, "test-key", "whisper-1")
+        finally:
+            path.unlink(missing_ok=True)
+            chunk_a.unlink(missing_ok=True)
+            chunk_b.unlink(missing_ok=True)
+        self.assertEqual(len(transcript.segments), 2)
+        self.assertEqual(transcript.segments[1].start, 2402)
+        self.assertEqual(transcript.duration, 2404)
+
 
 if __name__ == "__main__":
     unittest.main()

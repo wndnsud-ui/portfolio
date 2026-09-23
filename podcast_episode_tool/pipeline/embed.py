@@ -49,7 +49,7 @@ def upsert_approved_clip(
     db_path: Path = INDEX_PATH,
 ) -> bool:
     init_db(db_path)
-    text = f"{candidate.title}\n{candidate.listener_question}\n{candidate.transcript}"
+    text = f"{candidate.title}\n{candidate.summary}\n{candidate.listener_question}\n{candidate.transcript}"
     embedding = embed_text(text, api_key, model)
     row_id = f"{recording_id}:{candidate.id}:{int(candidate.start * 1000)}:{int(candidate.end * 1000)}"
     with sqlite3.connect(db_path) as conn:

@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import re
+import math
+import tempfile
 from pathlib import Path
+from typing import Callable
 
+from .media import ffprobe_duration, run_command
 from .models import Segment, Transcript
 
 TIMECODE_RE = re.compile(
@@ -43,10 +47,11 @@ def parse_timed_text(source_name: str, text: str) -> Transcript:
     return Transcript(source_name=source_name, duration=segments[-1].end, segments=segments)
 
 
-def transcribe_audio(path: Path, source_name: str, api_key: str, model: str) -> Transcript:
-    from openai import OpenAI
+MAX_DIRECT_UPLOAD_BYTES = 24_000_000
+CHUNK_SECONDS = 40 * 60
 
-    client = OpenAI(api_key=api_key)
+
+def _transcribe_file(client, path: Path, model: str) -> tuple[list[Segment], float | None]:
     with path.open("rb") as audio:
         if model == "whisper-1":
             result = client.audio.transcriptions.create(
@@ -67,9 +72,68 @@ def transcribe_audio(path: Path, source_name: str, api_key: str, model: str) -> 
         for s in raw_segments
         if getattr(s, "text", "").strip()
     ]
+    result_duration = getattr(result, "duration", None)
     if not segments:
         text = getattr(result, "text", "").strip()
-        duration = getattr(result, "duration", None) or 30
-        segments = [Segment(start=0, end=float(duration), text=text)] if text else []
-    duration = segments[-1].end if segments else None
-    return Transcript(source_name=source_name, duration=duration, segments=segments)
+        duration = float(result_duration or ffprobe_duration(path) or 30)
+        segments = [Segment(start=0, end=duration, text=text)] if text else []
+    return segments, float(result_duration) if result_duration else None
+
+
+def _make_chunks(path: Path, target_dir: Path) -> list[tuple[Path, float]]:
+    duration = ffprobe_duration(path)
+    if not duration:
+        raise RuntimeError("큰 음성 파일의 재생 시간을 확인하지 못했습니다. FFprobe 포함 여부를 확인해 주세요.")
+    chunks: list[tuple[Path, float]] = []
+    for index in range(math.ceil(duration / CHUNK_SECONDS)):
+        start = index * CHUNK_SECONDS
+        target = target_dir / f"chunk_{index + 1:03d}.mp3"
+        result = run_command([
+            "ffmpeg", "-y", "-ss", f"{start:.3f}", "-i", str(path),
+            "-t", str(CHUNK_SECONDS), "-vn", "-ac", "1", "-ar", "16000",
+            "-b:a", "56k", str(target),
+        ])
+        if result.returncode != 0 or not target.exists():
+            raise RuntimeError(result.stderr.strip() or "전사용 음성 청크 생성에 실패했습니다.")
+        if target.stat().st_size >= MAX_DIRECT_UPLOAD_BYTES:
+            raise RuntimeError("분할한 음성도 업로드 한도를 초과했습니다. 더 짧은 파일로 나눠 주세요.")
+        chunks.append((target, float(start)))
+    return chunks
+
+
+def transcribe_audio(
+    path: Path,
+    source_name: str,
+    api_key: str,
+    model: str,
+    progress: Callable[[int, int, str], None] | None = None,
+) -> Transcript:
+    from openai import OpenAI
+
+    client = OpenAI(api_key=api_key)
+    if path.stat().st_size < MAX_DIRECT_UPLOAD_BYTES:
+        if progress:
+            progress(0, 1, "음성을 OpenAI에 업로드하고 있습니다.")
+        segments, result_duration = _transcribe_file(client, path, model)
+        if progress:
+            progress(1, 1, "음성 전사를 완료했습니다.")
+        duration = segments[-1].end if segments else result_duration
+        return Transcript(source_name=source_name, duration=duration, segments=segments)
+
+    if progress:
+        progress(0, 0, "25MB를 넘는 음성을 전사용 청크로 준비하고 있습니다.")
+    with tempfile.TemporaryDirectory(prefix="podcast-transcribe-") as temp_dir:
+        chunks = _make_chunks(path, Path(temp_dir))
+        combined: list[Segment] = []
+        for index, (chunk_path, offset) in enumerate(chunks, start=1):
+            if progress:
+                progress(index - 1, len(chunks), f"음성 청크 {index}/{len(chunks)} 전사 중...")
+            segments, _ = _transcribe_file(client, chunk_path, model)
+            combined.extend(
+                Segment(start=segment.start + offset, end=segment.end + offset, text=segment.text)
+                for segment in segments
+            )
+        if progress:
+            progress(len(chunks), len(chunks), "전체 전사를 병합했습니다.")
+    duration = combined[-1].end if combined else ffprobe_duration(path)
+    return Transcript(source_name=source_name, duration=duration, segments=combined)

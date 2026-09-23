@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QProgressBar,
+    QScrollArea,
     QPushButton,
     QSplitter,
     QStatusBar,
@@ -94,6 +95,7 @@ class PodcastWindow(QMainWindow):
         super().__init__()
         self.settings = load_settings()
         self.pool = QThreadPool.globalInstance()
+        self.active_workers: set[Worker] = set()
         self.rid: str | None = None
         self.audio_path: Path | None = None
         self.txt_path: Path | None = None
@@ -233,9 +235,13 @@ class PodcastWindow(QMainWindow):
         form = QFormLayout()
         form.setLabelAlignment(form.labelAlignment())
         self.title_edit = QLineEdit()
+        self.summary_edit = QPlainTextEdit()
+        self.summary_edit.setMinimumHeight(115)
+        self.summary_edit.setMaximumHeight(160)
         self.question_edit = QLineEdit()
         self.reason_edit = QPlainTextEdit()
-        self.reason_edit.setMaximumHeight(72)
+        self.reason_edit.setMinimumHeight(90)
+        self.reason_edit.setMaximumHeight(130)
         self.start_edit = QDoubleSpinBox()
         self.start_edit.setRange(0, 999999)
         self.start_edit.setDecimals(1)
@@ -248,8 +254,10 @@ class PodcastWindow(QMainWindow):
         self.status_edit.addItem("보류", "hold")
         self.status_edit.addItem("승인", "approved")
         self.notes_edit = QPlainTextEdit()
-        self.notes_edit.setMaximumHeight(64)
+        self.notes_edit.setMinimumHeight(75)
+        self.notes_edit.setMaximumHeight(110)
         form.addRow("제목", self.title_edit)
+        form.addRow("에피소드 내용 요약", self.summary_edit)
         form.addRow("청취자 질문", self.question_edit)
         form.addRow("추천 이유", self.reason_edit)
 
@@ -277,8 +285,14 @@ class PodcastWindow(QMainWindow):
 
         outer.addWidget(QLabel("구간 전사문"))
         self.candidate_transcript = QPlainTextEdit()
+        self.candidate_transcript.setMinimumHeight(150)
         outer.addWidget(self.candidate_transcript, 1)
-        return editor
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidget(editor)
+        return scroll
 
     def _apply_style(self) -> None:
         self.setStyleSheet("""
@@ -339,8 +353,9 @@ class PodcastWindow(QMainWindow):
         self.elapsed_timer.start()
         self._set_busy(True, message)
         worker = Worker(fn, progress_aware=progress_aware)
-        worker.signals.finished.connect(lambda value: self._worker_done(value, done))
-        worker.signals.failed.connect(self._worker_failed)
+        self.active_workers.add(worker)
+        worker.signals.finished.connect(lambda value, active=worker: self._worker_done(value, done, active))
+        worker.signals.failed.connect(lambda error, active=worker: self._worker_failed(error, active))
         worker.signals.progress.connect(self._worker_progress)
         self.pool.start(worker)
 
@@ -355,7 +370,8 @@ class PodcastWindow(QMainWindow):
         self.progress_bar.setFormat(f"{current}/{total} 완료")
         self.progress_detail.setText(detail)
 
-    def _worker_done(self, value: Any, done: Callable[[Any], None]) -> None:
+    def _worker_done(self, value: Any, done: Callable[[Any], None], worker: Worker) -> None:
+        self.active_workers.discard(worker)
         self.elapsed_timer.stop()
         self._update_elapsed()
         self.progress_bar.setRange(0, 1)
@@ -366,7 +382,8 @@ class PodcastWindow(QMainWindow):
         self._set_busy(False, "완료")
         done(value)
 
-    def _worker_failed(self, message: str) -> None:
+    def _worker_failed(self, message: str, worker: Worker) -> None:
+        self.active_workers.discard(worker)
         self.elapsed_timer.stop()
         self._update_elapsed()
         self.progress_bar.setRange(0, 1)
@@ -458,14 +475,25 @@ class PodcastWindow(QMainWindow):
             return
         if self.txt_path:
             fn = lambda: parse_timed_text(self.txt_path.name, self.txt_path.read_text(encoding="utf-8-sig"))
+            progress_aware = False
         elif self.audio_path and self.settings.openai_api_key:
-            fn = lambda: transcribe_audio(
-                self.audio_path, self.audio_path.name, self.settings.openai_api_key, self.settings.transcribe_model
+            fn = lambda progress: transcribe_audio(
+                self.audio_path,
+                self.audio_path.name,
+                self.settings.openai_api_key,
+                self.settings.transcribe_model,
+                progress,
             )
+            progress_aware = True
         else:
             QMessageBox.warning(self, "API 키 필요", "음성 전사에는 EXE 옆 .env 파일의 OPENAI_API_KEY가 필요합니다.")
             return
-        self._run_worker(fn, "음성 업로드 및 전사 처리 중...", self._transcription_done)
+        self._run_worker(
+            fn,
+            "음성 업로드 및 전사 처리 중...",
+            self._transcription_done,
+            progress_aware=progress_aware,
+        )
 
     def _transcription_done(self, transcript: Transcript) -> None:
         if self.duration and transcript.duration and transcript.duration > self.duration + 60:
@@ -494,7 +522,13 @@ class PodcastWindow(QMainWindow):
         self.candidate_list.clear()
         for candidate in self.candidates:
             status = "승인" if candidate.status == "approved" else "보류"
-            self.candidate_list.addItem(f"[{status}] {candidate.title}\n{format_seconds(candidate.start)} - {format_seconds(candidate.end)}")
+            summary = candidate.summary.replace("\n", " ").strip()
+            if len(summary) > 55:
+                summary = summary[:55] + "..."
+            detail = f"\n{summary}" if summary else ""
+            self.candidate_list.addItem(
+                f"[{status}] {candidate.title}{detail}\n{format_seconds(candidate.start)} - {format_seconds(candidate.end)}"
+            )
         self.candidate_list.blockSignals(False)
         self.current_index = -1
         if self.candidates:
@@ -509,6 +543,7 @@ class PodcastWindow(QMainWindow):
         self.candidates[self.current_index] = Candidate(
             id=old.id,
             title=self.title_edit.text().strip() or old.title,
+            summary=self.summary_edit.toPlainText().strip(),
             listener_question=self.question_edit.text().strip(),
             reason=self.reason_edit.toPlainText().strip(),
             start=self.start_edit.value(),
@@ -527,6 +562,7 @@ class PodcastWindow(QMainWindow):
             return
         candidate = self.candidates[index]
         self.title_edit.setText(candidate.title)
+        self.summary_edit.setPlainText(candidate.summary)
         self.question_edit.setText(candidate.listener_question)
         self.reason_edit.setPlainText(candidate.reason)
         self.start_edit.setValue(candidate.start)
@@ -540,7 +576,7 @@ class PodcastWindow(QMainWindow):
     def _clear_editor(self) -> None:
         for field in (self.title_edit, self.question_edit):
             field.clear()
-        for field in (self.reason_edit, self.notes_edit, self.candidate_transcript):
+        for field in (self.summary_edit, self.reason_edit, self.notes_edit, self.candidate_transcript):
             field.clear()
         self.preview_button.setEnabled(False)
 

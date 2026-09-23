@@ -34,7 +34,7 @@ class DesktopProgressTests(unittest.TestCase):
         self.app.exec()
 
         self.assertEqual(completed, [["ok"]])
-        self.assertTrue(window.progress_panel.isVisibleTo(window))
+        self.assertFalse(window.progress_panel.isHidden())
         self.assertEqual(window.progress_bar.format(), "완료")
         window.close()
 

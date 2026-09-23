@@ -18,6 +18,7 @@ class Transcript(BaseModel):
 class Candidate(BaseModel):
     id: str = ""
     title: str
+    summary: str = ""
     listener_question: str
     reason: str
     start: float

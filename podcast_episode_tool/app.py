@@ -110,8 +110,9 @@ for idx, candidate in enumerate(candidates):
         left, right = st.columns([2, 1])
         with left:
             title = st.text_input("제목", candidate.title, key=f"title_{candidate.id}")
+            summary = st.text_area("에피소드 내용 요약", candidate.summary, height=140, key=f"summary_{candidate.id}")
             question = st.text_input("청취자 질문", candidate.listener_question, key=f"q_{candidate.id}")
-            reason = st.text_area("추천 이유", candidate.reason, key=f"r_{candidate.id}")
+            reason = st.text_area("추천 이유", candidate.reason, height=120, key=f"r_{candidate.id}")
             usage_type = st.selectbox("활용 유형", ["원본 클립", "새 녹음 소재", "짧은 클립"], index=["원본 클립", "새 녹음 소재", "짧은 클립"].index(candidate.usage_type) if candidate.usage_type in ["원본 클립", "새 녹음 소재", "짧은 클립"] else 0, key=f"u_{candidate.id}")
             review_notes = st.text_area("공개 전 확인할 표현", candidate.review_notes, key=f"n_{candidate.id}")
         with right:
@@ -129,6 +130,7 @@ for idx, candidate in enumerate(candidates):
         updated.append(Candidate(
             id=candidate.id,
             title=title,
+            summary=summary,
             listener_question=question,
             reason=reason,
             start=start,
