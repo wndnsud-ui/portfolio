@@ -1,0 +1,15 @@
+.env
+data/
+*.sqlite3
+*.db
+__pycache__/
+.streamlit/secrets.toml
+.venv/
+venv/
+env/
+*.pyc
+*.pyo
+*.pyd
+build/
+dist/
+*.spec.bak
