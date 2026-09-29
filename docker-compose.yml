@@ -1,0 +1,48 @@
+name: decisionflow
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-decisionflow}
+      POSTGRES_USER: ${POSTGRES_USER:-decisionflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-decisionflow-dev}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER:-decisionflow} -d ${POSTGRES_DB:-decisionflow}
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  decisionflow:
+    build:
+      context: .
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+    ports:
+      - "${APP_PORT:-8001}:8001"
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-decisionflow}:${POSTGRES_PASSWORD:-decisionflow-dev}@postgres:5432/${POSTGRES_DB:-decisionflow}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./.env:/app/.env
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
