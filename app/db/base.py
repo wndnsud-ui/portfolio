@@ -5,5 +5,4 @@ class Base(DeclarativeBase):
     pass
 
 
-from app.models import action_item, decision, meeting, notion, project, transcript  # noqa: E402,F401
-
+from app.models import action_item, blog_post, decision, meeting, notion, project, transcript, user  # noqa: E402,F401

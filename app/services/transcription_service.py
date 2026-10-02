@@ -1,4 +1,6 @@
 import asyncio
+import os
+import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -14,6 +16,24 @@ class TranscriptionService:
     openai_file_limit = 25 * 1024 * 1024
     max_file_size = 250 * 1024 * 1024
     chunk_duration_seconds = 300
+
+    @staticmethod
+    def _ffmpeg_executable() -> str:
+        if settings.ffmpeg_path:
+            configured = Path(settings.ffmpeg_path).expanduser()
+            if configured.is_file():
+                return str(configured)
+            raise AppError("FFMPEG_NOT_FOUND", "설정된 FFMPEG_PATH에서 실행 파일을 찾지 못했습니다.", 500)
+        discovered = shutil.which("ffmpeg")
+        if discovered:
+            return discovered
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            package_root = Path(local_app_data) / "Microsoft" / "WinGet" / "Packages"
+            matches = sorted(package_root.glob("Gyan.FFmpeg_*/*/bin/ffmpeg.exe"), reverse=True)
+            if matches:
+                return str(matches[0])
+        raise AppError("FFMPEG_NOT_FOUND", "서버에 FFmpeg가 설치되지 않았습니다.", 500)
 
     @staticmethod
     def _timestamp(seconds: float) -> str:
@@ -65,7 +85,7 @@ class TranscriptionService:
             output_pattern = Path(directory) / "chunk-%03d.mp3"
             source.write_bytes(content)
             process = await asyncio.create_subprocess_exec(
-                "ffmpeg", "-hide_banner", "-loglevel", "error", "-i", str(source),
+                self._ffmpeg_executable(), "-hide_banner", "-loglevel", "error", "-i", str(source),
                 "-vn", "-ac", "1", "-ar", "16000", "-b:a", "32k",
                 "-f", "segment", "-segment_time", str(self.chunk_duration_seconds), "-reset_timestamps", "1",
                 str(output_pattern), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,

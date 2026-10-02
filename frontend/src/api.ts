@@ -1,9 +1,14 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/+$/, "");
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = localStorage.getItem("decisionflow_token");
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
-    headers: options.body instanceof FormData ? options.headers : { "Content-Type": "application/json", ...options.headers }
+    headers: {
+      ...(options.body instanceof FormData ? options.headers : { "Content-Type": "application/json" }),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers
+    }
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
@@ -11,3 +16,5 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   }
   return response.status === 204 ? (undefined as T) : response.json();
 }
+
+export const apiBaseUrl = API_BASE_URL;

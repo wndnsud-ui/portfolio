@@ -5,6 +5,7 @@ from app.services.risk_service import risk_service
 
 class MLService:
     model_version = "rule-v1"
+    prediction_mode = "rule_fallback"
 
     def predict_delay_risk(self, item: ActionItem) -> tuple[float, RiskLevel, str]:
         score, level = risk_service.score(item)
@@ -12,4 +13,3 @@ class MLService:
 
 
 ml_service = MLService()
-

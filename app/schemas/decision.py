@@ -32,3 +32,13 @@ class DecisionRead(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+class DecisionHistoryRead(BaseModel):
+    id: int
+    decision_id: int
+    meeting_id: int | None
+    previous_value: str | None
+    new_value: str
+    changed_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

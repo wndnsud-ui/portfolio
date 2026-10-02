@@ -10,6 +10,7 @@ class MeetingCreate(BaseModel):
     title: str
     meeting_date: date
     participants: list[str] = Field(default_factory=list)
+    speaker_names: dict[str, str] = Field(default_factory=dict)
     transcript: str
 
 
@@ -17,6 +18,7 @@ class MeetingUpdate(BaseModel):
     title: str | None = None
     meeting_date: date | None = None
     participants: list[str] | None = None
+    speaker_names: dict[str, str] | None = None
     transcript: str | None = None
     summary: str | None = None
     discussion: str | None = None
@@ -30,6 +32,7 @@ class MeetingRead(BaseModel):
     title: str
     meeting_date: date
     participants: list[str]
+    speaker_names: dict[str, str] = Field(default_factory=dict)
     summary: str | None
     discussion: str | None
     undecided_topics: list[str] = Field(default_factory=list)

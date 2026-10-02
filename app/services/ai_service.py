@@ -4,7 +4,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.exceptions import AppError
-from app.schemas.analysis import DecisionCandidate
+from app.schemas.analysis import DecisionCandidate, SpeakerAnalysisResult
 from app.schemas.meeting import MeetingDetail
 
 
@@ -40,6 +40,45 @@ MEETING_SUMMARY_SCHEMA = {
         "action_items": {"type": "array", "items": {"type": "string"}},
     },
     "required": ["summary", "issues", "decisions", "open_questions", "action_items"],
+    "additionalProperties": False,
+}
+
+SPEAKER_ANALYSIS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "summary": {"type": "string"},
+        "issues": {"type": "array", "items": {"type": "string"}},
+        "speakers": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "speaker": {"type": "string"},
+                    "points": {"type": "array", "items": {"type": "string"}},
+                    "stance": {"type": "string"},
+                },
+                "required": ["speaker", "points", "stance"],
+                "additionalProperties": False,
+            },
+        },
+        "action_items": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "task": {"type": "string"},
+                    "assignee": {"type": ["string", "null"]},
+                    "due_date": {"type": ["string", "null"]},
+                    "priority": {"type": "string", "enum": ["low", "medium", "high"]},
+                    "evidence": {"type": "string"},
+                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                },
+                "required": ["task", "assignee", "due_date", "priority", "evidence", "confidence"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["summary", "issues", "speakers", "action_items"],
     "additionalProperties": False,
 }
 
@@ -101,6 +140,24 @@ class AIService:
             "meeting_summary",
             MEETING_SUMMARY_SCHEMA,
         )
+
+    async def analyze_speakers(self, transcript: str, speaker_names: dict[str, str]) -> SpeakerAnalysisResult:
+        if not transcript.strip():
+            raise AppError("TRANSCRIPT_REQUIRED", "회의 원문이 필요합니다.", 400)
+        aliases = "\n".join(f"- {label}: {name}" for label, name in speaker_names.items() if name.strip()) or "- 등록된 화자 이름 없음"
+        system = (
+            "당신은 한국어 회의 퍼실리테이터입니다. 제공된 화자 매핑은 관리자가 추정한 이름이므로 그대로 사용하되, "
+            "원문 근거 없이 사람이나 발언을 새로 만들지 마세요. 쟁점별로 누가 어떤 의견을 냈고 어디서 합의·이견이 있었는지 요약하세요. "
+            "실행 의사나 요청이 확인되는 항목만 action_items 후보로 만드세요. 담당자와 기한이 불명확하면 null로 두고, "
+            "due_date는 YYYY-MM-DD 형식으로 작성하세요. evidence에는 후보의 근거가 된 짧은 원문을 넣으세요."
+        )
+        result = await self._structured_response(
+            system,
+            f"화자 매핑:\n{aliases}\n\n회의 원문:\n{transcript}",
+            "speaker_analysis",
+            SPEAKER_ANALYSIS_SCHEMA,
+        )
+        return SpeakerAnalysisResult.model_validate({"meeting_id": 0, **result})
 
     async def extract_decision_candidates(self, transcript: str) -> list[DecisionCandidate]:
         if not settings.openai_api_key:
