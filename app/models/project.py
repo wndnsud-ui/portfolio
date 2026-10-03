@@ -10,6 +10,7 @@ class Project(Base):
     __tablename__ = "projects"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(ForeignKey("workspaces.id"), index=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text)

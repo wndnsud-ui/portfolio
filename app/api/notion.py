@@ -10,6 +10,8 @@ from app.models.notion import NotionSyncLog
 from app.models.project import Project
 from app.models.user import User
 from app.services.notion_service import notion_service
+from app.core.exceptions import AppError
+from app.services.permissions import require_project_manager
 
 router = APIRouter(tags=["Notion"])
 
@@ -25,6 +27,8 @@ async def notion_connect(current_user: User = Depends(get_current_user)) -> dict
 
 
 async def sync_one(meeting: Meeting, db: Session) -> dict:
+    if meeting.report_status != "PUBLISHED":
+        raise AppError("PUBLISHED_MEETING_REQUIRED", "Only published meeting reports can sync to Notion.", 409)
     previous = (
         db.query(NotionSyncLog)
         .filter(NotionSyncLog.meeting_id == meeting.id, NotionSyncLog.status == NotionSyncStatus.synced)
@@ -42,8 +46,8 @@ async def sync_one(meeting: Meeting, db: Session) -> dict:
         result = await notion_service.sync_meeting(
             meeting=meeting,
             project_name=meeting.project.name,
-            decisions=list(meeting.decisions),
-            action_items=list(meeting.action_items),
+            decisions=[d for d in meeting.decisions if d.status == "confirmed"],
+            action_items=[t for t in meeting.action_items if t.assignee_id is not None and t.workflow_status != "CANCELLED"],
         )
         meeting.notion_sync_status = NotionSyncStatus.synced
         db.add(
@@ -71,13 +75,15 @@ async def sync_one(meeting: Meeting, db: Session) -> dict:
 
 @router.post("/meetings/{meeting_id}/notion-sync")
 async def sync_meeting_to_notion(meeting_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> dict:
-    return await sync_one(get_meeting_or_404(db, meeting_id, current_user), db)
+    meeting = get_meeting_or_404(db, meeting_id, current_user)
+    require_project_manager(db, meeting.project, current_user.id)
+    return await sync_one(meeting, db)
 
 
 @router.post("/notion/sync-demo")
 async def sync_demo_meetings(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> dict:
     demo_projects = {"DecisionFlow MVP", "2026 브랜드 웹사이트", "고객 운영 개선"}
-    meetings = db.query(Meeting).join(Project).filter(Project.name.in_(demo_projects), Meeting.user_id == current_user.id).all()
+    meetings = db.query(Meeting).join(Project).filter(Project.name.in_(demo_projects), Meeting.user_id == current_user.id, Meeting.report_status == "PUBLISHED").all()
     results = [await sync_one(meeting, db) for meeting in meetings]
     return {"synced": len(results), "results": results}
 

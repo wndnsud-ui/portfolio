@@ -11,6 +11,8 @@ from app.models.user import User
 from app.schemas.action_item import PredictionRead, RiskRead
 from app.services.ml_service import ml_service
 from app.services.risk_service import risk_service
+from app.services.permissions import is_project_manager
+from app.models.project import Project
 
 router = APIRouter(tags=["Risk"])
 
@@ -41,7 +43,8 @@ async def predict_action_item_risk(action_item_id: int, db: Session = Depends(ge
 @router.get("/projects/{project_id}/risk-items", response_model=list[PredictionRead])
 async def list_project_risk_items(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> list[PredictionRead]:
     get_project_or_404(db, project_id, current_user)
-    items = db.query(ActionItem).filter(ActionItem.project_id == project_id, ActionItem.user_id == current_user.id, ActionItem.risk_level == RiskLevel.high).all()
+    items = db.query(ActionItem).filter(ActionItem.project_id == project_id, ActionItem.risk_level == RiskLevel.high).all()
+    items = [item for item in items if item.assignee_id == current_user.id or is_project_manager(db, db.get(Project, project_id), current_user.id)]
     return [
         PredictionRead(
             action_item_id=item.id,

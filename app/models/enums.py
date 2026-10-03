@@ -21,6 +21,9 @@ class RiskLevel(StrEnum):
 
 
 class DecisionStatus(StrEnum):
+    candidate = "candidate"
+    rejected = "rejected"
+    changed = "changed"
     draft = "draft"
     confirmed = "confirmed"
 

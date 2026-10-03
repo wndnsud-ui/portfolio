@@ -1,5 +1,47 @@
 # DecisionFlow
 
+## 회의 없는 업무지시 · 결과물 제출
+
+- 팀장/소유자: 협업 화면의 **업무 · 결재함 → 회의 없이 업무지시**에서 프로젝트, 담당 팀원, 업무 제목, 지시 내용, 마감일과 우선순위를 입력합니다. 담당 팀원은 먼저 해당 프로젝트에 등록되어 있어야 합니다.
+- 팀원: **내 업무**에서 업무를 열어 **업무 수락 → 업무 시작** 후 결과 파일을 업로드하고 결과 설명을 작성해 **결재 요청**합니다.
+- 팀장: 업무 상세에서 파일을 확인하고 승인 또는 수정 요청합니다. 승인한 업무는 **최종 결과**에서 다시 열 수 있습니다.
+- PDF, PNG/JPG, TXT/MD는 화면 미리보기를 지원하며 Word(DOCX), Excel(XLSX)은 다운로드해 확인합니다. 파일당 최대 20MB입니다.
+
+## 팀장·팀원 테스트 계정
+
+아래 명령으로 현재 `DATABASE_URL`의 DB에 테스트 계정과 공용 테스트 프로젝트를 생성합니다. 먼저 `python -m alembic upgrade head`를 실행하세요. 재실행해도 계정과 프로젝트가 중복 생성되지 않으며 기존 계정의 비밀번호를 덮어쓰지 않습니다.
+
+```powershell
+python -m scripts.seed_test_accounts
+# Docker DB에 생성할 경우
+docker compose exec decisionflow python -m scripts.seed_test_accounts
+```
+
+| 구분 | 로그인 아이디(이메일) | 비밀번호 | Workspace 권한 |
+| --- | --- | --- | --- |
+| 팀장 | `leader@decisionflow.test` | `LeaderTest123!` | `MANAGER` |
+| 팀원 | `member@decisionflow.test` | `MemberTest123!` | `MEMBER` |
+
+로그인 후 `권한 테스트 Workspace`와 `팀장·팀원 권한 테스트` 프로젝트를 선택하세요. 두 계정은 같은 프로젝트에 참여하며 팀장 계정에는 프로젝트 관리 권한이 있습니다. Workspace 소유자(`OWNER`) 권한과는 별개입니다.
+
+계정은 명령을 실행한 DB에만 생성됩니다. 운영 환경에서는 명시적으로 `--allow-production`을 지정해야 하며, 공개된 비밀번호이므로 테스트 후 계정을 삭제하거나 비밀번호를 변경하세요.
+
+## 4차 고도화: 회의 검토·업무 결재
+
+Workspace와 프로젝트 멤버를 등록한 뒤 회의 담당자 검토 → 팀장 승인·게시 → 실제 사용자 업무 배정 → 수락·수행·결과 제출 → 승인·최종 결과 게시 흐름을 사용합니다. 로그인 후 Workspace를 선택하고 **검토 · 결재 · 알림** 화면에서 진행합니다.
+
+구현·검증·운영 제한 사항은 [구현 보고서](docs/phase2-v4-implementation-report.md)에 정리했습니다.
+
+```powershell
+docker compose up --build -d
+# 로컬 Python 환경에서 API·마이그레이션 회귀 검증
+python -m unittest discover -s tests -v
+```
+
+앱 시작 시 Alembic을 최신 리비전으로 적용합니다. 기존 운영 DB는 먼저 백업하세요. 운영 설정은 `APP_ENV=production`, PostgreSQL `DATABASE_URL`, 별도 `SECRET_KEY`를 요구합니다. `ATTACHMENT_DIR=/data/attachments`를 영구 볼륨에 연결하고 기존 암호화·서명 키를 유지하세요. 개인 OpenAI/Notion 키는 로그인 후 설정에서 저장합니다.
+
+운영 서비스: https://decisionflow-production.up.railway.app/ · Docker 이미지: `wndnsud/decisionflow:v4-20261004`.
+
 DecisionFlow는 회의 기록을 프로젝트별로 관리하고, 결정사항과 Action Item을 추적하는 FastAPI 기반 백엔드 서비스입니다. 현재 MVP는 규칙 기반 지연 위험도 계산을 제공하며 AI 분석, Notion 연동, ML 예측을 확장할 수 있도록 서비스 계층이 분리되어 있습니다.
 
 ## 주요 기능

@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { CirclePause, CirclePlay, Download, Mic, Square, Upload, WandSparkles } from "lucide-react";
 import { api } from "./api";
 
-interface Props { onTranscript:(text:string) => void; onError:(message:string) => void; fileBaseName?:string; }
+interface Props { onTranscript:(text:string) => void; onError:(message:string) => void; fileBaseName?:string; meetingId?:number; }
 
-export default function AudioRecorder({ onTranscript, onError, fileBaseName="회의녹음" }: Props) {
+export default function AudioRecorder({ onTranscript, onError, fileBaseName="회의녹음", meetingId }: Props) {
   const [status, setStatus] = useState<"idle" | "recording" | "paused" | "ready" | "transcribing" | "complete">("idle");
   const [transcriptionStep,setTranscriptionStep]=useState(0);
   const [processError,setProcessError]=useState("");
@@ -97,8 +97,22 @@ export default function AudioRecorder({ onTranscript, onError, fileBaseName="회
       await new Promise(resolve=>window.setTimeout(resolve,350));
       setTranscriptionStep(2);
       const body = new FormData(); body.append("file", file);
-      const result = await api<{text:string}>("/transcriptions", { method:"POST", body });
-      onTranscript(result.text); onError(""); setTranscriptionStep(3); setStatus("complete");
+      if (meetingId) {
+        const job=await api<{id:number}>(`/meetings/${meetingId}/input/file?recording=true`,{method:"POST",body});
+        for (;;) {
+          await new Promise(resolve=>window.setTimeout(resolve,1500));
+          const jobs=await api<{id:number;status:string;error:string|null}[]>(`/meetings/${meetingId}/input/jobs`);
+          const current=jobs.find(value=>value.id===job.id);
+          if(current?.status==="FAILED")throw new Error(current.error||"전사 실패");
+          if(current?.status==="TRANSCRIBED")break;
+        }
+        const meeting=await api<{transcript:string}>(`/meetings/${meetingId}`);
+        onTranscript(meeting.transcript);
+      } else {
+        const result = await api<{text:string}>("/transcriptions", { method:"POST", body });
+        onTranscript(result.text);
+      }
+      onError(""); setTranscriptionStep(3); setStatus("complete");
     } catch (error) { const message=error instanceof Error ? error.message : "음성 전사에 실패했습니다.";setProcessError(message);onError(message);setStatus("ready"); }
   }
 

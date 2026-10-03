@@ -1,3 +1,4 @@
+from app.services.integration_context import integration_value
 from collections.abc import Iterable
 from typing import Any
 
@@ -16,17 +17,17 @@ class NotionService:
     @property
     def headers(self) -> dict[str, str]:
         return {
-            "Authorization": f"Bearer {settings.notion_api_key}",
+            "Authorization": f"Bearer {integration_value('notion_api_key')}",
             "Notion-Version": settings.notion_api_version,
             "Content-Type": "application/json",
         }
 
     def status(self) -> dict[str, bool | str]:
-        connected = bool(settings.notion_api_key and settings.notion_database_id)
+        connected = bool(integration_value('notion_api_key') and integration_value('notion_database_id'))
         return {"connected": connected, "mode": "developer-token" if connected else "not-connected"}
 
     def _require_config(self) -> None:
-        if not settings.notion_api_key or not settings.notion_database_id:
+        if not integration_value('notion_api_key') or not integration_value('notion_database_id'):
             raise AppError("NOTION_CONNECTION_ERROR", "Notion API key or database ID is not configured.", 400)
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
@@ -46,7 +47,7 @@ class NotionService:
         return response.json()
 
     async def connection_info(self) -> dict[str, Any]:
-        database = await self._request("GET", f"/databases/{settings.notion_database_id}")
+        database = await self._request("GET", f"/databases/{integration_value('notion_database_id')}")
         data_sources = database.get("data_sources", [])
         if not data_sources:
             raise AppError("NOTION_DATABASE_ERROR", "Notion 데이터베이스에 데이터 소스가 없습니다.", 422)

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.models.enums import DecisionStatus
 
@@ -18,6 +18,13 @@ class DecisionUpdate(BaseModel):
     topic: str | None = None
     value: str | None = None
     status: DecisionStatus | None = None
+
+    @model_validator(mode="after")
+    def reject_null_required_fields(self):
+        for name in self.model_fields_set & {"topic", "value", "status"}:
+            if getattr(self, name) is None:
+                raise ValueError(f"{name} cannot be null")
+        return self
 
 
 class DecisionRead(BaseModel):

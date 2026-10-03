@@ -11,6 +11,13 @@ class ActionItem(Base):
     __tablename__ = "action_items"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    assignee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    assigned_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    description: Mapped[str | None] = mapped_column(Text)
+    workflow_status: Mapped[str | None] = mapped_column(String(30), index=True)
+    progress_percent: Mapped[int | None] = mapped_column(Integer)
+    progress_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    progress_content: Mapped[str | None] = mapped_column(Text)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     meeting_id: Mapped[int | None] = mapped_column(ForeignKey("meetings.id", ondelete="SET NULL"), index=True)

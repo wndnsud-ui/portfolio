@@ -27,11 +27,13 @@ services:
       - "${APP_PORT:-8001}:8001"
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-decisionflow}:${POSTGRES_PASSWORD:-decisionflow-dev}@postgres:5432/${POSTGRES_DB:-decisionflow}
+      ATTACHMENT_DIR: /data/attachments
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - ./.env:/app/.env
+      - attachment_data:/data
     restart: unless-stopped
     healthcheck:
       test:
@@ -46,3 +48,4 @@ services:
 
 volumes:
   postgres_data:
+  attachment_data:

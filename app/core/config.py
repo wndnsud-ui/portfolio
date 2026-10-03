@@ -1,7 +1,10 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import model_validator
 
 
 class Settings(BaseSettings):
+    app_env: str = "development"
+    attachment_dir: str = "data/attachments"
     database_url: str = "sqlite:///./decisionflow.db"
     openai_api_key: str = ""
     transcription_model: str = "gpt-transcribe"
@@ -22,6 +25,14 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @model_validator(mode="after")
+    def validate_production_database(self):
+        if self.app_env == "production" and not self.database_url.startswith(("postgresql://", "postgresql+psycopg://")):
+            raise ValueError("Production requires PostgreSQL DATABASE_URL.")
+        if self.app_env == "production" and self.secret_key == "change-me":
+            raise ValueError("Production requires a configured SECRET_KEY.")
+        return self
 
 
 settings = Settings()

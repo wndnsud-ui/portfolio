@@ -1,11 +1,13 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.models.enums import ActionStatus, Priority, RiskLevel
 
 
 class ActionItemCreate(BaseModel):
+    assignee_id: int | None = None
+    description: str | None = None
     project_id: int
     meeting_id: int | None = None
     task: str
@@ -16,6 +18,8 @@ class ActionItemCreate(BaseModel):
 
 
 class ActionItemUpdate(BaseModel):
+    assignee_id: int | None = None
+    description: str | None = None
     meeting_id: int | None = None
     task: str | None = None
     assignee: str | None = None
@@ -23,8 +27,22 @@ class ActionItemUpdate(BaseModel):
     status: ActionStatus | None = None
     priority: Priority | None = None
 
+    @model_validator(mode="after")
+    def reject_null_required_fields(self):
+        for name in self.model_fields_set & {"task", "status", "priority"}:
+            if getattr(self, name) is None:
+                raise ValueError(f"{name} cannot be null")
+        return self
+
 
 class ActionItemRead(BaseModel):
+    progress_percent: int | None = None
+    progress_updated_at: datetime | None = None
+    progress_content: str | None = None
+    assignee_id: int | None = None
+    assigned_by: int | None = None
+    description: str | None = None
+    workflow_status: str | None = None
     id: int
     project_id: int
     meeting_id: int | None

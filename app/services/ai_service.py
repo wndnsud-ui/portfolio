@@ -1,3 +1,4 @@
+from app.services.integration_context import integration_value
 import json
 
 import httpx
@@ -85,7 +86,7 @@ SPEAKER_ANALYSIS_SCHEMA = {
 
 class AIService:
     async def _structured_response(self, system: str, user: str, name: str, schema: dict) -> dict:
-        if not settings.openai_api_key:
+        if not integration_value('openai_api_key'):
             raise AppError("OPENAI_API_KEY_MISSING", "OpenAI API key is not configured.", 503)
         payload = {
             "model": settings.decision_analysis_model,
@@ -99,7 +100,7 @@ class AIService:
             async with httpx.AsyncClient(timeout=120) as client:
                 response = await client.post(
                     "https://api.openai.com/v1/responses",
-                    headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+                    headers={"Authorization": f"Bearer {integration_value('openai_api_key')}"},
                     json=payload,
                 )
         except httpx.RequestError as exc:
@@ -160,7 +161,7 @@ class AIService:
         return SpeakerAnalysisResult.model_validate({"meeting_id": 0, **result})
 
     async def extract_decision_candidates(self, transcript: str) -> list[DecisionCandidate]:
-        if not settings.openai_api_key:
+        if not integration_value('openai_api_key'):
             raise AppError("OPENAI_API_KEY_MISSING", "OpenAI API key is not configured.", 503)
 
         payload = {
@@ -197,7 +198,7 @@ class AIService:
             async with httpx.AsyncClient(timeout=60) as client:
                 response = await client.post(
                     "https://api.openai.com/v1/responses",
-                    headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+                    headers={"Authorization": f"Bearer {integration_value('openai_api_key')}"},
                     json=payload,
                 )
         except httpx.RequestError as exc:

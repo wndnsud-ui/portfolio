@@ -1,4 +1,5 @@
 .env
+data/attachments/
 .venv/
 __pycache__/
 *.py[cod]

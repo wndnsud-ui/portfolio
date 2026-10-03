@@ -8,8 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from sqlalchemy import inspect, text
 
-from app.api import action_items, auth, blog, decisions, meetings, notion, projects, risk, settings as settings_api, transcriptions
+from app.api import workspaces, action_items, auth, blog, decisions, meetings, notion, projects, risk, settings as settings_api, transcriptions
 from app.core.config import settings
+from app.api import workflow
+from app.api import meeting_inputs
 from app.core.exceptions import register_exception_handlers
 from app.db.base import Base
 from app.db.session import engine
@@ -50,6 +52,9 @@ def create_app() -> FastAPI:
                     )
         return await call_next(request)
 
+    app.include_router(workspaces.router, prefix="/api")
+    app.include_router(workflow.router, prefix="/api")
+    app.include_router(meeting_inputs.router, prefix="/api")
     app.include_router(projects.router, prefix="/api")
     app.include_router(auth.router, prefix="/api")
     app.include_router(blog.router, prefix="/api")
@@ -66,8 +71,10 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     def create_tables() -> None:
-        Base.metadata.create_all(bind=engine)
         ensure_legacy_columns()
+        from alembic import command
+        from alembic.config import Config
+        command.upgrade(Config("alembic.ini"), "head")
 
     @app.get("/health")
     async def health() -> dict[str, str]:

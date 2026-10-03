@@ -11,6 +11,10 @@ class Meeting(Base):
     __tablename__ = "meetings"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    recorder_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    report_status: Mapped[str] = mapped_column(String(30), default="DRAFT", index=True)
+    input_type: Mapped[str] = mapped_column(String(20), default="text_paste")
+    candidates: Mapped[dict] = mapped_column(JSON, default=dict)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(250), nullable=False, index=True)

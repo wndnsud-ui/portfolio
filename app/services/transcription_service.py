@@ -1,3 +1,4 @@
+from app.services.integration_context import integration_value
 import asyncio
 import os
 import shutil
@@ -46,7 +47,7 @@ class TranscriptionService:
     ) -> str:
         response = await client.post(
             self.endpoint,
-            headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+            headers={"Authorization": f"Bearer {integration_value('openai_api_key')}"},
             data={
                 "model": settings.diarization_model,
                 "response_format": "diarized_json",
@@ -99,8 +100,8 @@ class TranscriptionService:
                 raise AppError("AUDIO_PROCESSING_ERROR", "음성 파일에서 처리할 구간을 찾지 못했습니다.", 422)
             return chunks
 
-    async def transcribe(self, filename: str, content: bytes, content_type: str | None) -> str:
-        if not settings.openai_api_key:
+    async def transcribe(self, filename: str, content: bytes, content_type: str | None, on_chunk=None) -> str:
+        if not integration_value('openai_api_key'):
             raise AppError("OPENAI_API_KEY_MISSING", "OPENAI_API_KEY가 설정되지 않았습니다.", 503)
 
         extension = Path(filename).suffix.lower()
@@ -122,9 +123,12 @@ class TranscriptionService:
                 async def transcribe_chunk(index: int, chunk_name: str, chunk_content: bytes) -> str:
                     try:
                         async with semaphore:
-                            return await self._request(
+                            text = await self._request(
                                 client, chunk_name, chunk_content, "audio/mpeg", index, len(chunks)
                             )
+                            if on_chunk:
+                                on_chunk(index, len(chunks), text)
+                            return text
                     except AppError as exc:
                         raise AppError(
                             exc.code,

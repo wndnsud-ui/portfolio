@@ -1,8 +1,11 @@
+from app.models.project import Project
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.api.projects import get_project_or_404
+from app.services.permissions import visible_projects, require_project_manager, workspace_role, require_meeting_editor
+from app.services.workflow_service import validate_project_user, activity
 from app.api.deps import get_current_user
 from app.core.exceptions import AppError
 from app.db.session import get_db
@@ -11,6 +14,7 @@ from app.models.decision import Decision
 from app.models.enums import ActionStatus, DecisionStatus, NotionSyncStatus
 from app.models.meeting import Meeting
 from app.models.transcript import Transcript
+from app.models.workflow import TranscriptionJob
 from app.models.user import User
 from app.schemas.action_item import ActionItemRead
 from app.schemas.analysis import ActionItemConfirmRequest, DecisionCandidateResult, DecisionConfirmRequest, SpeakerAnalysisRequest, SpeakerAnalysisResult
@@ -18,14 +22,18 @@ from app.schemas.decision import DecisionRead
 from app.schemas.meeting import MeetingCreate, MeetingDetail, MeetingRead, MeetingUpdate
 from app.services.ai_service import ai_service
 from app.services.risk_service import risk_service
+from app.services.permissions import is_project_manager
+from app.models.decision import DecisionHistory
 
 router = APIRouter(prefix="/meetings", tags=["Meetings"])
 
 
-def get_meeting_or_404(db: Session, meeting_id: int, user: User | None = None) -> Meeting:
+def get_meeting_or_404(db: Session, meeting_id: int, user: User | None = None, lock: bool = False) -> Meeting:
     query = db.query(Meeting).filter(Meeting.id == meeting_id)
     if user:
-        query = query.filter(Meeting.user_id == user.id)
+        query = query.filter(Meeting.project_id.in_(visible_projects(db, user.id)))
+    if lock:
+        query = query.with_for_update()
     meeting = query.first()
     if not meeting:
         raise AppError("INVALID_MEETING", "Meeting not found.", 404)
@@ -41,10 +49,13 @@ def to_detail(meeting: Meeting) -> MeetingDetail:
 
 @router.post("", response_model=MeetingDetail)
 async def create_meeting(payload: MeetingCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> MeetingDetail:
-    get_project_or_404(db, payload.project_id, current_user)
+    require_project_manager(db, get_project_or_404(db, payload.project_id, current_user), current_user.id)
+    validate_project_user(db, payload.project_id, payload.recorder_id)
     meeting = Meeting(**payload.model_dump(exclude={"transcript"}), user_id=current_user.id)
     meeting.transcript = Transcript(content=payload.transcript)
     db.add(meeting)
+    db.flush()
+    activity(db, meeting.project_id, current_user.id, "meeting_created", "meeting", meeting.id)
     db.commit()
     db.refresh(meeting)
     return to_detail(meeting)
@@ -57,7 +68,7 @@ async def list_meetings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[Meeting]:
-    query = db.query(Meeting).filter(Meeting.user_id == current_user.id)
+    query = db.query(Meeting).filter(Meeting.project_id.in_(visible_projects(db, current_user.id)))
     if project_id:
         query = query.filter(Meeting.project_id == project_id)
     if q:
@@ -82,8 +93,20 @@ async def read_meeting(meeting_id: int, db: Session = Depends(get_db), current_u
 
 @router.patch("/{meeting_id}", response_model=MeetingDetail)
 async def update_meeting(meeting_id: int, payload: MeetingUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> MeetingDetail:
-    meeting = get_meeting_or_404(db, meeting_id, current_user)
+    meeting = get_meeting_or_404(db, meeting_id, current_user, lock=True)
+    require_meeting_editor(db, meeting, current_user.id)
+    if meeting.report_status in {"TRANSCRIBING", "APPROVED", "PUBLISHED"} or (meeting.report_status == "MANAGER_REVIEW" and not is_project_manager(db, meeting.project, current_user.id)):
+        raise AppError("REVIEW_LOCKED", "Return meeting for changes before editing.", 409)
     data = payload.model_dump(exclude_unset=True)
+    if data.get("analysis_status") == "confirmed":
+        raise AppError("WORKFLOW_REQUIRED", "Use meeting approval to confirm the report.", 409)
+    if db.query(TranscriptionJob).filter_by(meeting_id=meeting_id, status="ANALYZING").first():
+        raise AppError("ANALYSIS_BUSY", "AI analysis is already running.", 409)
+    if "recorder_id" in data:
+        require_project_manager(db, db.get(Project, meeting.project_id), current_user.id)
+        validate_project_user(db, meeting.project_id, data["recorder_id"])
+    if meeting.report_status in {"AI_ANALYZED", "CHANGES_REQUESTED"} or (meeting.report_status == "DRAFT" and any(k in data for k in {"summary", "discussion", "candidates"})):
+        meeting.report_status = "RECORDER_REVIEW"
     transcript = data.pop("transcript", None)
     for key, value in data.items():
         setattr(meeting, key, value)
@@ -103,19 +126,53 @@ async def update_meeting(meeting_id: int, payload: MeetingUpdate, db: Session = 
 @router.delete("/{meeting_id}", status_code=204)
 async def delete_meeting(meeting_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> None:
     meeting = get_meeting_or_404(db, meeting_id, current_user)
+    require_project_manager(db, db.get(Project, meeting.project_id), current_user.id)
     db.delete(meeting)
     db.commit()
 
 
 @router.post("/{meeting_id}/analyze")
-async def analyze_meeting(meeting_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> dict:
-    meeting = to_detail(get_meeting_or_404(db, meeting_id, current_user))
-    return await ai_service.analyze_meeting(meeting)
+async def analyze_meeting(meeting_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> MeetingDetail:
+    meeting = get_meeting_or_404(db, meeting_id, current_user, lock=True)
+    require_meeting_editor(db, meeting, current_user.id)
+    if meeting.report_status in {"TRANSCRIBING", "MANAGER_REVIEW", "APPROVED", "PUBLISHED"}:
+        raise AppError("REVIEW_LOCKED", "Return meeting for changes before analysis.", 409)
+    job = db.query(TranscriptionJob).filter_by(meeting_id=meeting_id).order_by(TranscriptionJob.id.desc()).first()
+    if job and job.status == "ANALYZING":
+        raise AppError("ANALYSIS_BUSY", "AI analysis is already running.", 409)
+    if not job:
+        job = TranscriptionJob(meeting_id=meeting_id, user_id=current_user.id)
+        db.add(job)
+    job.status, job.progress, job.error = "ANALYZING", 0, None
+    db.commit()
+    text = meeting.transcript.content if meeting.transcript else ""
+    try:
+        summary = await ai_service.summarize_meeting(text)
+        speakers = await ai_service.analyze_speakers(text, meeting.speaker_names)
+        decisions = await ai_service.extract_decision_candidates(text)
+    except Exception:
+        job.status, job.error = "FAILED", "AI 분석에 실패했습니다. 설정과 원문을 확인해 주세요."
+        db.commit()
+        raise
+    meeting.summary = summary["summary"]
+    meeting.discussion = "\n".join(summary["issues"])
+    meeting.undecided_topics = summary["open_questions"]
+    meeting.candidates = {"decisions": [d.model_dump(mode="json") for d in decisions],
+        "action_items": [a.model_dump(mode="json") for a in speakers.action_items],
+        "speaker_segments": [s.model_dump(mode="json") for s in speakers.speakers],
+        "follow_up_topics": summary["open_questions"]}
+    meeting.report_status = "AI_ANALYZED"
+    job.status, job.progress = "REVIEW_READY", 100
+    db.commit()
+    return to_detail(meeting)
 
 
 @router.post("/{meeting_id}/summarize", response_model=MeetingDetail)
 async def summarize_meeting(meeting_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> MeetingDetail:
     meeting = get_meeting_or_404(db, meeting_id, current_user)
+    require_meeting_editor(db, meeting, current_user.id)
+    if meeting.report_status in {"MANAGER_REVIEW", "APPROVED", "PUBLISHED"}:
+        raise AppError("REVIEW_LOCKED", "Return meeting for changes before editing.", 409)
     transcript = meeting.transcript.content.strip() if meeting.transcript else ""
     result = await ai_service.summarize_meeting(transcript)
     meeting.summary = result["summary"]
@@ -126,7 +183,8 @@ async def summarize_meeting(meeting_id: int, db: Session = Depends(get_db), curr
             sections.append(f"## {title}\n" + "\n".join(f"- {value}" for value in values))
     meeting.discussion = "\n\n".join(sections)
     meeting.undecided_topics = result["open_questions"]
-    meeting.analysis_status = "confirmed"
+    meeting.analysis_status = "draft"
+    meeting.report_status = "AI_ANALYZED"
     db.commit()
     db.refresh(meeting)
     return to_detail(meeting)
@@ -140,6 +198,9 @@ async def analyze_meeting_speakers(
     current_user: User = Depends(get_current_user),
 ) -> SpeakerAnalysisResult:
     meeting = get_meeting_or_404(db, meeting_id, current_user)
+    require_meeting_editor(db, meeting, current_user.id)
+    if meeting.report_status in {"MANAGER_REVIEW", "APPROVED", "PUBLISHED"}:
+        raise AppError("REVIEW_LOCKED", "Return meeting for changes before editing.", 409)
     transcript = meeting.transcript.content.strip() if meeting.transcript else ""
     cleaned_names = {key.strip(): value.strip() for key, value in payload.speaker_names.items() if key.strip() and value.strip()}
     meeting.speaker_names = cleaned_names
@@ -156,6 +217,9 @@ async def confirm_action_items(
     current_user: User = Depends(get_current_user),
 ) -> list[ActionItem]:
     meeting = get_meeting_or_404(db, meeting_id, current_user)
+    require_project_manager(db, db.get(Project, meeting.project_id), current_user.id)
+    if meeting.report_status not in {"APPROVED", "PUBLISHED"}:
+        raise AppError("APPROVAL_REQUIRED", "Approve the meeting before confirming tasks.", 409)
     saved: list[ActionItem] = []
     for candidate in payload.action_items:
         item = ActionItem(
@@ -182,6 +246,9 @@ async def extract_decision_candidates(
     meeting_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ) -> DecisionCandidateResult:
     meeting = get_meeting_or_404(db, meeting_id, current_user)
+    require_meeting_editor(db, meeting, current_user.id)
+    if meeting.report_status in {"MANAGER_REVIEW", "APPROVED", "PUBLISHED"}:
+        raise AppError("REVIEW_LOCKED", "Return meeting for changes before editing.", 409)
     transcript = meeting.transcript.content.strip() if meeting.transcript else ""
     if not transcript:
         raise AppError("TRANSCRIPT_REQUIRED", "A transcript is required for decision analysis.", 400)
@@ -194,6 +261,9 @@ async def confirm_decisions(
     meeting_id: int, payload: DecisionConfirmRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ) -> list[Decision]:
     meeting = get_meeting_or_404(db, meeting_id, current_user)
+    require_project_manager(db, db.get(Project, meeting.project_id), current_user.id)
+    if meeting.report_status not in {"APPROVED", "PUBLISHED"}:
+        raise AppError("APPROVAL_REQUIRED", "Approve the meeting before confirming decisions.", 409)
     saved: list[Decision] = []
     for item in payload.decisions:
         topic = item.topic.strip()
@@ -221,6 +291,8 @@ async def confirm_decisions(
             status=DecisionStatus.confirmed,
         )
         db.add(decision)
+        db.flush()
+        db.add(DecisionHistory(decision_id=decision.id, meeting_id=meeting.id, new_value=value))
         saved.append(decision)
     db.commit()
     for decision in saved:
