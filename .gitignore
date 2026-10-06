@@ -1,4 +1,5 @@
 .env
+*.log
 data/attachments/
 .venv/
 __pycache__/
