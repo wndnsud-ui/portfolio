@@ -60,6 +60,9 @@ def invite(workspace_id: int, payload: InviteCreate, db: Session = Depends(get_d
     email = payload.email.strip().lower()
     if "@" not in email:
         raise AppError("INVALID_EMAIL", "Email is required.", 400)
+    existing = db.query(User).filter_by(email=email).first()
+    if existing and db.query(WorkspaceMember).filter_by(workspace_id=workspace_id, user_id=existing.id).first():
+        raise AppError("ALREADY_MEMBER", "이미 이 팀에 참여한 사용자입니다.", 409)
     token = secrets.token_urlsafe(32)
     db.add(WorkspaceInvite(workspace_id=workspace_id, email=email, role=payload.role,
         token_hash=hashlib.sha256(token.encode()).hexdigest(), expires_at=datetime.utcnow() + timedelta(days=7)))
@@ -73,13 +76,31 @@ def invite(workspace_id: int, payload: InviteCreate, db: Session = Depends(get_d
 @router.post("/workspace-invites/accept")
 def accept_invite(payload: InviteAccept, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     invitation = db.query(WorkspaceInvite).filter_by(token_hash=hashlib.sha256(payload.token.encode()).hexdigest()).with_for_update().first()
-    if not invitation or invitation.email != user.email or invitation.accepted_at or invitation.expires_at < datetime.utcnow():
-        raise AppError("INVALID_INVITE", "Invitation is invalid or expired.", 400)
+    return complete_invite(db, invitation, user)
+
+
+def complete_invite(db, invitation, user):
+    if not invitation or invitation.email != user.email.lower() or invitation.accepted_at or invitation.expires_at < datetime.utcnow():
+        raise AppError("INVALID_INVITE", "본인 이메일로 받은 유효한 초대만 수락할 수 있습니다. 초대는 7일 후 만료됩니다.", 400)
     if not db.query(WorkspaceMember).filter_by(workspace_id=invitation.workspace_id, user_id=user.id).first():
         db.add(WorkspaceMember(workspace_id=invitation.workspace_id, user_id=user.id, role=invitation.role))
     invitation.accepted_at = datetime.utcnow()
     db.commit()
     return {"workspace_id": invitation.workspace_id}
+
+
+@router.get("/workspace-invites")
+def received_invites(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    rows = db.query(WorkspaceInvite, Workspace).join(Workspace, Workspace.id == WorkspaceInvite.workspace_id).filter(
+        WorkspaceInvite.email == user.email.lower(), WorkspaceInvite.accepted_at.is_(None),
+        WorkspaceInvite.expires_at > datetime.utcnow()).all()
+    return [{"id": i.id, "workspace_name": w.name, "role": i.role, "expires_at": i.expires_at} for i, w in rows]
+
+
+@router.post("/workspace-invites/{invite_id}/accept")
+def accept_received_invite(invite_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    invitation = db.query(WorkspaceInvite).filter_by(id=invite_id).with_for_update().first()
+    return complete_invite(db, invitation, user)
 
 
 @router.delete("/workspaces/{workspace_id}/members/{member_id}", status_code=204)

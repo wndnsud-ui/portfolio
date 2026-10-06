@@ -40,11 +40,19 @@ python -m unittest discover -s tests -v
 
 앱 시작 시 Alembic을 최신 리비전으로 적용합니다. 기존 운영 DB는 먼저 백업하세요. 운영 설정은 `APP_ENV=production`, PostgreSQL `DATABASE_URL`, 별도 `SECRET_KEY`를 요구합니다. `ATTACHMENT_DIR=/data/attachments`를 영구 볼륨에 연결하고 기존 암호화·서명 키를 유지하세요. 개인 OpenAI/Notion 키는 로그인 후 설정에서 저장합니다.
 
-운영 서비스: https://decisionflow-production.up.railway.app/ · Docker 이미지: `wndnsud/decisionflow:v4-20261006-r2`.
+운영 서비스: https://decisionflow-production.up.railway.app/ · Docker 이미지: `wndnsud/decisionflow:v4-20261006-r3`.
 
 DecisionFlow는 회의 기록을 프로젝트별로 관리하고, 결정사항과 Action Item을 추적하는 FastAPI 기반 백엔드 서비스입니다. 현재 MVP는 규칙 기반 지연 위험도 계산을 제공하며 AI 분석, Notion 연동, ML 예측을 확장할 수 있도록 서비스 계층이 분리되어 있습니다.
 
 ## 주요 기능
+
+### 팀 만들기와 팀원 초대
+
+회원가입 후 상단 **팀 만들기·초대**에서 팀 이름을 입력하면 팀장(소유자)으로 시작합니다. 팀 소유자는 이메일과 역할(팀원/팀장)을 지정해 초대하고, 참여한 사용자의 역할을 변경할 수 있습니다.
+
+초대받은 사람은 해당 이메일로 가입·로그인한 뒤 **팀 만들기·초대 → 받은 초대 → 초대 수락**으로 참여합니다. 초대는 7일간 유효하며 이메일을 발송하지 않고 앱에서 확인합니다. 가입 전에 받은 초대도 같은 이메일로 가입하면 표시됩니다.
+
+팀원 참여 후 **검토 · 결재 · 알림 → 팀원**에서 프로젝트에 추가하면 업무를 배정할 수 있습니다. 역할은 계정 전체가 아닌 팀별로 적용됩니다.
 
 - 프로젝트 CRUD
 - 프로젝트 상세에서 회의 원문, 결정사항, Action Item 통합 조회

@@ -68,6 +68,38 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(self.client.post(f"/api/meetings/{mid}/decisions/confirm", headers=self.member[1], json={"decisions": []}).status_code, 403)
         self.assertEqual(self.client.post("/api/decisions", headers=self.member[1], json={"project_id": self.project, "topic": "illegal", "value": "illegal", "status": "confirmed"}).status_code, 403)
 
+    def test_email_invitation_requires_matching_account(self):
+        result = self.client.post(f"/api/workspaces/{self.workspace}/invites", headers=self.owner[1], json={"email": "outsider@example.com", "role": "MEMBER"})
+        self.assertEqual(result.status_code, 201, result.text)
+        invitations = self.client.get("/api/workspace-invites", headers=self.outsider[1]).json()
+        self.assertEqual(len(invitations), 1)
+        invitation_id = invitations[0]["id"]
+        self.assertEqual(invitations[0]["role"], "MEMBER")
+        self.assertEqual(self.client.get("/api/workspace-invites", headers=self.member[1]).json(), [])
+        self.assertEqual(self.client.post(f"/api/workspace-invites/{invitation_id}/accept", headers=self.member[1]).status_code, 400)
+        accepted = self.client.post(f"/api/workspace-invites/{invitation_id}/accept", headers=self.outsider[1])
+        self.assertEqual(accepted.status_code, 200, accepted.text)
+        self.assertEqual(self.client.get("/api/workspace-invites", headers=self.outsider[1]).json(), [])
+        self.assertEqual(self.client.post(f"/api/workspace-invites/{invitation_id}/accept", headers=self.outsider[1]).status_code, 400)
+        workspaces = self.client.get("/api/workspaces", headers=self.outsider[1]).json()
+        self.assertEqual(workspaces[0]["role"], "MEMBER")
+        self.assertEqual(self.client.post(f"/api/workspaces/{self.workspace}/invites", headers=self.outsider[1], json={"email": "new@example.com"}).status_code, 403)
+        self.assertEqual(self.client.post(f"/api/workspaces/{self.workspace}/invites", headers=self.owner[1], json={"email": "outsider@example.com"}).status_code, 409)
+        self.assertEqual(self.client.put(f"/api/projects/{self.project}/members/{self.outsider[0]}", headers=self.owner[1]).status_code, 200)
+        self.assertEqual(self.client.get(f"/api/projects/{self.project}", headers=self.outsider[1]).status_code, 200)
+
+    def test_expired_email_invitation_cannot_be_accepted(self):
+        from datetime import datetime, timedelta
+        from app.models.workspace import WorkspaceInvite
+        self.client.post(f"/api/workspaces/{self.workspace}/invites", headers=self.owner[1], json={"email": "outsider@example.com"})
+        with self.sessions() as db:
+            invitation = db.query(WorkspaceInvite).first()
+            invitation_id = invitation.id
+            invitation.expires_at = datetime.utcnow() - timedelta(days=1)
+            db.commit()
+        self.assertEqual(self.client.get("/api/workspace-invites", headers=self.outsider[1]).json(), [])
+        self.assertEqual(self.client.post(f"/api/workspace-invites/{invitation_id}/accept", headers=self.outsider[1]).status_code, 400)
+
     def test_login_and_owner_protection(self):
         response = self.client.post("/api/auth/login", json={"email": "owner@example.com", "password": "test-password"})
         self.assertEqual(response.status_code, 200)

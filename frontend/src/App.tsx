@@ -9,6 +9,7 @@ import { ActionsPage, DecisionsPage, MeetingsPage, ProjectDetailPage, ProjectsPa
 import Sidebar from "./Sidebar";
 import HomeDashboard from "./HomeDashboard";
 import SettingsPage from "./SettingsPage";
+import TeamSetup, { roleLabel } from "./TeamSetup";
 const WorkflowPage=lazy(()=>import("./WorkflowPage"));
 import type { Workspace } from "./types";
 import SpeakerAnalysisModal from "./SpeakerAnalysisModal";
@@ -20,6 +21,7 @@ const endpoints:Record<EntityType,string>={projects:"/projects",meetings:"/meeti
 
 export default function App() {
   const [view,setView]=useState<View>("dashboard");
+  const [teamSetup,setTeamSetup]=useState(false);
   const [workspaceId,setWorkspaceId]=useState<number|null>(null);
   const [modal,setModal]=useState<{type:EntityType;item:Entity|null;defaults?:Record<string,string|number>}|null>(null);
   const [projectTarget,setProjectTarget]=useState<{projectId:number;meetingId?:number;actionId?:number;decisionId?:number}|null>(null);
@@ -55,8 +57,8 @@ export default function App() {
   function notify(message:string){setToast(message);window.setTimeout(()=>setToast(""),2600);}
   const remove=useMutation({mutationFn:({type,id}:{type:EntityType;id:number})=>api(`${endpoints[type]}/${id}`,{method:"DELETE"}),onSuccess:async()=>{await queryClient.invalidateQueries();notify("삭제했습니다.");}});
   useEffect(()=>{const params=new URLSearchParams(window.location.search);const oauthToken=params.get("token");const token=oauthToken||localStorage.getItem("decisionflow_token");if(oauthToken){localStorage.setItem("decisionflow_token",oauthToken);setAuthenticated(true);if(params.get("onboarding")==="1"){setOnboarding(true);setView("settings");}window.history.replaceState({},document.title,window.location.pathname);}if(!token){setAuthChecking(false);return;}api<AuthUser>("/auth/me").then(current=>{setUser(current);if(oauthToken)notify(`${current.nickname||current.email}님, 환영합니다.`);}).catch(()=>{localStorage.removeItem("decisionflow_token");setAuthenticated(false);}).finally(()=>setAuthChecking(false));},[]);
-  function handleAuth(current:AuthUser,isNew:boolean){setUser(current);setAuthenticated(true);setAuthChecking(false);if(isNew){setOnboarding(true);setView("settings");}notify(`${current.nickname||current.email}님, 환영합니다.`);}
-  async function logout(){try{await api("/auth/logout",{method:"POST"});}finally{localStorage.removeItem("decisionflow_token");setUser(null);setAuthenticated(false);setOnboarding(false);setWorkspaceId(null);setModal(null);setReview(null);setSpeakerReview(null);setProjectTarget(null);setSidebarOpen(false);setView("dashboard");queryClient.clear();}}
+  function handleAuth(current:AuthUser,isNew:boolean){setUser(current);setAuthenticated(true);setAuthChecking(false);if(isNew){setOnboarding(true);setView("settings");setTeamSetup(true);}notify(`${current.nickname||current.email}님, 환영합니다.`);}
+  async function logout(){try{await api("/auth/logout",{method:"POST"});}finally{localStorage.removeItem("decisionflow_token");setUser(null);setAuthenticated(false);setOnboarding(false);setTeamSetup(false);setWorkspaceId(null);setModal(null);setReview(null);setSpeakerReview(null);setProjectTarget(null);setSidebarOpen(false);setView("dashboard");queryClient.clear();}}
   if(authChecking) return <div className="auth-loading">로그인 상태를 확인하는 중...</div>;
   if(!authenticated||!user) return <><AuthPage onAuth={handleAuth} onNotify={notify}/>{toast&&<div className="toast">{toast}</div>}</>;
   async function refresh(){await queryClient.invalidateQueries();notify("새로고침했습니다.");}
@@ -83,9 +85,10 @@ export default function App() {
   return <div className="app-shell">
     <Sidebar view={view} open={sidebarOpen} onCreateMeeting={()=>create("meetings")} onToggle={()=>setSidebarOpen(value=>!value)} onChange={next=>{setView(next);setProjectTarget(null);setSidebarOpen(false);}}/>
     <main className="main-content">
-      <header className="topbar"><div><span className="kicker">WORKSPACE</span><h1>{pageNames[view]}</h1></div><div className="topbar-right"><select aria-label="Workspace 전환" value={workspaceId??0} onChange={e=>selectWorkspace(Number(e.target.value))}><option value="0">개인 프로젝트</option>{workspaces.data?.map(w=><option key={w.id} value={w.id}>{w.name} · {w.role}</option>)}</select>{view!=="settings"&&view!=="workflow"&&workspace?.role!=="MEMBER"&&<div className="top-actions"><button className="icon-control desktop-only" onClick={refresh} title="새로고침"><RefreshCw/></button><button className="button primary" onClick={()=>create(view==="dashboard"?"meetings":undefined)}><Plus/>{createNames[view==="dashboard"?"meetings":view as EntityType]}</button></div>}<div className="user-session"><UserRound/><span><b>{user.nickname||user.email.split("@")[0]}님</b><small>로그인 중</small></span><button className="icon-control" onClick={logout} title="로그아웃"><LogOut/></button></div></div></header>
+      <header className="topbar"><div><span className="kicker">WORKSPACE</span><h1>{pageNames[view]}</h1></div><div className="topbar-right"><button className="button soft" onClick={()=>setTeamSetup(true)}>팀 만들기·초대</button><select aria-label="Workspace 전환" value={workspaceId??0} onChange={e=>selectWorkspace(Number(e.target.value))}><option value="0">개인 프로젝트</option>{workspaces.data?.map(w=><option key={w.id} value={w.id}>{w.name} · {roleLabel(w.role)}</option>)}</select>{view!=="settings"&&view!=="workflow"&&workspace?.role!=="MEMBER"&&<div className="top-actions"><button className="icon-control desktop-only" onClick={refresh} title="새로고침"><RefreshCw/></button><button className="button primary" onClick={()=>create(view==="dashboard"?"meetings":undefined)}><Plus/>{createNames[view==="dashboard"?"meetings":view as EntityType]}</button></div>}<div className="user-session"><UserRound/><span><b>{user.nickname||user.email.split("@")[0]}님</b><small>로그인 중</small></span><button className="icon-control" onClick={logout} title="로그아웃"><LogOut/></button></div></div></header>
       <Suspense fallback={<div className="loading">협업 화면을 불러오는 중...</div>}>{view==="settings"?<SettingsPage onNotify={notify} onboarding={onboarding} onOnboardingComplete={()=>setOnboarding(false)}/>:view==="workflow"||(view==="dashboard"&&workspace)?<WorkflowPage key={workspace?.id||"none"} workspace={workspace} user={user} projects={data.projects} meetings={data.meetings} onNotify={notify} onSelectWorkspace={selectWorkspace}/>:loading?<div className="loading">데이터를 불러오는 중...</div>:loadError?<div className="page"><section className="panel" role="alert"><h2>데이터를 불러오지 못했습니다.</h2><p>{loadError instanceof Error?loadError.message:"잠시 후 다시 시도해 주세요."}</p><button className="button soft" onClick={refresh}>다시 시도</button></section></div>:selectedProject?<ProjectDetailPage {...common} project={selectedProject} target={projectTarget||undefined} onBack={()=>setProjectTarget(null)}/>:<Current {...common}/>}</Suspense>
     </main>
+    {teamSetup&&<TeamSetup workspace={workspace} onSelect={selectWorkspace} onClose={()=>setTeamSetup(false)}/>}
     {modal&&<EntityModal {...modal} projects={data.projects} onClose={()=>setModal(null)} onSave={onSave}/>} 
     {review&&<DecisionReviewModal meeting={review.meeting} candidates={review.candidates} saving={savingReview} onClose={()=>setReview(null)} onConfirm={onConfirm}/>} 
     {speakerReview&&<SpeakerAnalysisModal meeting={speakerReview.meeting} analysis={speakerReview.analysis} saving={savingActions} onClose={()=>setSpeakerReview(null)} onConfirm={onConfirmActions} onSaveSpeakerNames={onSaveSpeakerNames}/>}

@@ -19,7 +19,7 @@ services:
       retries: 10
 
   decisionflow:
-    image: wndnsud/decisionflow:v4-20261006-r2
+    image: wndnsud/decisionflow:v4-20261006-r3
     build:
       context: .
       args:
