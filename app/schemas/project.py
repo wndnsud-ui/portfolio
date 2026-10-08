@@ -21,6 +21,7 @@ class ProjectUpdate(BaseModel):
 
 
 class ProjectRead(BaseModel):
+    is_example: bool = False
     workspace_id: int | None = None
     id: int
     name: str

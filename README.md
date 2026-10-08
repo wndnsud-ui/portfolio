@@ -1,5 +1,28 @@
 # DecisionFlow
 
+상단 **튜토리얼 보기**에서 혼자 사용·팀장으로 시작·팀원으로 참여 안내를 실행할 수 있습니다. 첫 로그인에는 안내가 열리며 건너뛰거나 닫은 뒤에도 버튼으로 다시 볼 수 있습니다. 신규 가입 시 예시 데이터는 자동 생성하지 않습니다. 이전 예시 데이터는 홈에서 삭제할 수 있습니다.
+
+Google 로그인 및 비밀번호 찾기 환경 설정: [설정 안내](docs/auth-setup.md).
+
+## 팀장 팀원 추가 · Streamlit ECharts
+
+화면 확인용 더미 데이터는 `python -m scripts.seed_workflow_demo`로 추가합니다. 테스트 Workspace에 프로젝트 3개, 회의 6개, 업무 24개, 결정 6개, 최종 결과 3개와 Markdown 첨부파일 6개를 만듭니다. 다시 실행해도 같은 더미 프로젝트는 중복 생성하지 않습니다. 진행률은 시작 0%, 중간 50%, 마무리 100% 버튼을 선택하고 진행 내용을 작성해 저장합니다.
+
+- Workspace 선택 → **팀원** 메뉴에서 팀장이 이메일로 **가입된 팀원 바로 추가**를 사용할 수 있습니다.
+- 가입 전인 팀원에게는 **초대 코드 생성** 후 코드를 전달합니다. 해당 이메일로 가입한 팀원이 협업 화면 상단에서 초대를 수락합니다.
+- Workspace에 추가한 뒤 참여할 프로젝트를 선택하고 **프로젝트에 추가**를 눌러야 업무를 배정할 수 있습니다. 팀장 지정과 역할 변경은 소유자만 가능합니다.
+- 홈과 협업 현황판의 업무 상태 차트는 `streamlit-echarts`로 렌더링합니다. 차트 서버에는 상태별 집계 숫자만 전달하며 DB나 로그인 토큰에 접근하지 않습니다.
+- Docker 실행은 `docker compose up --build -d`로 차트 서버(8501)도 함께 실행합니다.
+- 로컬에서는 API와 별도로 차트 전용 가상환경을 사용합니다(최신 Streamlit과 기존 FastAPI의 Starlette 의존성 충돌 방지).
+
+```powershell
+python -m venv .venv-charts
+.\.venv-charts\Scripts\python.exe -m pip install -r charts/requirements.txt
+.\.venv-charts\Scripts\python.exe -m streamlit run charts/streamlit_app.py --server.port=8501 --server.headless=true
+```
+
+별도 도메인에 차트 서버를 배포할 때 프런트엔드 빌드 환경의 `VITE_STREAMLIT_URL`을 공개 HTTPS 차트 주소로 지정합니다. 기본값은 현재 호스트의 8501 포트입니다.
+
 ## 회의 없는 업무지시 · 결과물 제출
 
 - 팀장/소유자: 협업 화면의 **업무 · 결재함 → 회의 없이 업무지시**에서 프로젝트, 담당 팀원, 업무 제목, 지시 내용, 마감일과 우선순위를 입력합니다. 담당 팀원은 먼저 해당 프로젝트에 등록되어 있어야 합니다.

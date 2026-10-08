@@ -47,7 +47,7 @@ def _unb64(data: str) -> bytes:
 def create_access_token(user: User) -> str:
     now = int(time.time())
     header = {"alg": "HS256", "typ": "JWT"}
-    payload = {"sub": str(user.id), "email": user.email, "iat": now, "exp": now + TOKEN_TTL_SECONDS}
+    payload = {"sub": str(user.id), "email": user.email, "ver": user.auth_version or 0, "iat": now, "exp": now + TOKEN_TTL_SECONDS}
     signing_input = f"{_b64(json.dumps(header, separators=(',', ':')).encode())}.{_b64(json.dumps(payload, separators=(',', ':')).encode())}"
     signature = hmac.new(settings.secret_key.encode(), signing_input.encode(), hashlib.sha256).digest()
     return f"{signing_input}.{_b64(signature)}"

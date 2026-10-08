@@ -356,7 +356,10 @@ def remove_attachment(attachment_id: int, db: Session = Depends(get_db), user: U
 @router.get("/notifications")
 def notifications(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     today = datetime.now(ZoneInfo("Asia/Seoul")).date()
+    example_ids = {p.id for p in db.query(Project).filter_by(user_id=user.id, is_example=True)}
     for task in tasks(None, db, user):
+        if task.project_id in example_ids:
+            continue
         if task.assignee_id == user.id and task.due_date and today <= task.due_date <= today + timedelta(days=1) and task.status not in {"done", "cancelled"}:
             key = f"task_due_soon:{task.id}:{user.id}:{task.due_date}"
             if not db.query(Notification).filter_by(dedup_key=key).first():

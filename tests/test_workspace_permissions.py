@@ -68,6 +68,18 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(self.client.post(f"/api/meetings/{mid}/decisions/confirm", headers=self.member[1], json={"decisions": []}).status_code, 403)
         self.assertEqual(self.client.post("/api/decisions", headers=self.member[1], json={"project_id": self.project, "topic": "illegal", "value": "illegal", "status": "confirmed"}).status_code, 403)
 
+    def test_manager_adds_and_invites_members_without_promoting(self):
+        path = f"/api/workspaces/{self.workspace}"
+        response = self.client.post(path + "/members", headers=self.manager[1], json={"email": "outsider@example.com"})
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual(response.json()["role"], "MEMBER")
+        self.assertEqual(self.client.post(path + "/members", headers=self.manager[1], json={"email": "outsider@example.com"}).status_code, 409)
+        self.assertEqual(self.client.post(path + "/members", headers=self.member[1], json={"email": "owner@example.com"}).status_code, 403)
+        self.assertEqual(self.client.post(path + "/members", headers=self.manager[1], json={"email": "missing@example.com"}).status_code, 404)
+        invitation = self.client.post(path + "/invites", headers=self.manager[1], json={"email": "outsider@example.com"})
+        self.assertEqual(invitation.status_code, 201, invitation.text)
+        self.assertEqual(self.client.post(path + "/invites", headers=self.manager[1], json={"email": "outsider@example.com", "role": "MANAGER"}).status_code, 403)
+
     def test_login_and_owner_protection(self):
         response = self.client.post("/api/auth/login", json={"email": "owner@example.com", "password": "test-password"})
         self.assertEqual(response.status_code, 200)
@@ -75,6 +87,16 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/auth/google/callback?code=test&state=invalid").status_code, 400)
         self.assertEqual(self.client.put(f"/api/workspaces/{self.workspace}/members/{self.owner[0]}", headers=self.owner[1], json={"user_id": self.owner[0], "role": "MEMBER"}).status_code, 409)
         self.assertEqual(self.client.put(f"/api/workspaces/{self.workspace}/members/{self.outsider[0]}", headers=self.member[1], json={"user_id": self.outsider[0], "role": "MANAGER"}).status_code, 403)
+
+    def test_invite_whitespace_and_email_errors(self):
+        invitation = self.client.post(f"/api/workspaces/{self.workspace}/invites", headers=self.owner[1], json={"email":"outsider@example.com"}).json()
+        token = invitation["token"]
+        mismatch = self.client.post("/api/workspace-invites/accept", headers=self.member[1], json={"token":token})
+        self.assertEqual(mismatch.json()["error"]["code"], "INVITE_EMAIL_MISMATCH")
+        accepted = self.client.post("/api/workspace-invites/accept", headers=self.outsider[1], json={"token":" \n"+token+"\n "})
+        self.assertEqual(accepted.status_code, 200, accepted.text)
+        reused = self.client.post("/api/workspace-invites/accept", headers=self.outsider[1], json={"token":token})
+        self.assertEqual(reused.json()["error"]["code"], "INVITE_USED")
 
 
 if __name__ == "__main__":

@@ -16,6 +16,8 @@ async def get_current_user(authorization: str | None = Header(default=None), db:
     user = db.get(User, int(payload["sub"]))
     if not user:
         raise AppError("USER_NOT_FOUND", "User not found.", 401)
+    if payload.get("ver", 0) != user.auth_version:
+        raise AppError("SESSION_REVOKED", "비밀번호가 변경되었습니다. 다시 로그인해 주세요.", 401)
     personal = user.settings
     context_token = credentials.set({
         "openai_api_key": decrypt_secret(personal.openai_api_key_encrypted) if personal else None,

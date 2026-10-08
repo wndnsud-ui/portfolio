@@ -3,6 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LogOut, Plus, RefreshCw, UserRound } from "lucide-react";
 import { api } from "./api";
 import AuthPage from "./AuthPage";
+import CreateTeamModal from "./CreateTeamModal";
+import FirstUseTutorial from "./FirstUseTutorial";
+import PasswordRecovery from "./PasswordRecovery";
 import EntityModal from "./EntityModal";
 import DecisionReviewModal from "./DecisionReviewModal";
 import { ActionsPage, DecisionsPage, MeetingsPage, ProjectDetailPage, ProjectsPage } from "./Pages";
@@ -10,17 +13,22 @@ import Sidebar from "./Sidebar";
 import HomeDashboard from "./HomeDashboard";
 import SettingsPage from "./SettingsPage";
 const WorkflowPage=lazy(()=>import("./WorkflowPage"));
+const TaskPanel=lazy(()=>import("./WorkflowPage").then(module=>({default:module.TaskPanel})));
 import type { Workspace } from "./types";
 import SpeakerAnalysisModal from "./SpeakerAnalysisModal";
 import type { ActionItem, ActionItemCandidate, AuthUser, Decision, DecisionCandidate, Entity, EntityType, Meeting, Project, SpeakerAnalysis, View } from "./types";
 
-const pageNames:Record<View,string>={ dashboard:"홈", projects:"프로젝트", meetings:"회의", actions:"업무 관리", decisions:"결정사항", settings:"설정", workflow:"검토 · 결재 · 알림" };
+const pageNames:Record<View,string>={ dashboard:"홈", projects:"프로젝트", meetings:"회의", actions:"업무 관리", decisions:"결정사항", settings:"설정", workflow:"검토 · 결재 · 알림", team:"팀 관리" };
 const createNames:Record<EntityType,string>={ projects:"새 프로젝트", meetings:"새 회의", actions:"새 업무", decisions:"새 결정" };
 const endpoints:Record<EntityType,string>={projects:"/projects",meetings:"/meetings",actions:"/action-items",decisions:"/decisions"};
 
 export default function App() {
   const [view,setView]=useState<View>("dashboard");
+  const [resetToken]=useState(()=>new URLSearchParams(window.location.hash.slice(1)).get("reset_token"));
   const [workspaceId,setWorkspaceId]=useState<number|null>(null);
+  const [creatingTeam,setCreatingTeam]=useState(false);
+  const [showTutorial,setShowTutorial]=useState(false);
+  const [taskDetailId,setTaskDetailId]=useState<number|null>(null);
   const [modal,setModal]=useState<{type:EntityType;item:Entity|null;defaults?:Record<string,string|number>}|null>(null);
   const [projectTarget,setProjectTarget]=useState<{projectId:number;meetingId?:number;actionId?:number;decisionId?:number}|null>(null);
   const [sidebarOpen,setSidebarOpen]=useState(false);
@@ -38,10 +46,12 @@ export default function App() {
   const [savingActions,setSavingActions]=useState(false);
   const queryClient=useQueryClient();
   const canLoadData=authenticated&&Boolean(user);
+  useEffect(()=>{setShowTutorial(Boolean(user)&&!localStorage.getItem(`decisionflow_tutorial_v1_${user?.id}`));},[user?.id]);
+  function closeTutorial(){if(user)localStorage.setItem(`decisionflow_tutorial_v1_${user.id}`,"seen");setShowTutorial(false);}
   const workspaces=useQuery({queryKey:["workspaces",user?.id],enabled:canLoadData,queryFn:()=>api<Workspace[]>("/workspaces")});
   useEffect(()=>{if(workspaces.data?.length&&(workspaceId===null||(workspaceId!==0&&!workspaces.data.some(w=>w.id===workspaceId))))setWorkspaceId(workspaces.data[0].id);},[workspaces.data,workspaceId]);
   const workspace=workspaces.data?.find(w=>w.id===workspaceId)||null;
-  function selectWorkspace(id:number){setWorkspaceId(id);setProjectTarget(null);setModal(null);setReview(null);setSpeakerReview(null);setView("dashboard");}
+  function selectWorkspace(id:number){setWorkspaceId(id);setTaskDetailId(null);setProjectTarget(null);setModal(null);setReview(null);setSpeakerReview(null);setView(current=>current==="team"?"team":"dashboard");}
 
   const projects=useQuery({queryKey:["projects",user?.id],enabled:canLoadData,queryFn:()=>api<Project[]>("/projects")});
   const meetings=useQuery({queryKey:["meetings",user?.id],enabled:canLoadData,queryFn:()=>api<Meeting[]>("/meetings")});
@@ -54,15 +64,16 @@ export default function App() {
   const loadError=[projects,meetings,actions,decisions].find(query=>query.isError)?.error;
   function notify(message:string){setToast(message);window.setTimeout(()=>setToast(""),2600);}
   const remove=useMutation({mutationFn:({type,id}:{type:EntityType;id:number})=>api(`${endpoints[type]}/${id}`,{method:"DELETE"}),onSuccess:async()=>{await queryClient.invalidateQueries();notify("삭제했습니다.");}});
-  useEffect(()=>{const params=new URLSearchParams(window.location.search);const oauthToken=params.get("token");const token=oauthToken||localStorage.getItem("decisionflow_token");if(oauthToken){localStorage.setItem("decisionflow_token",oauthToken);setAuthenticated(true);if(params.get("onboarding")==="1"){setOnboarding(true);setView("settings");}window.history.replaceState({},document.title,window.location.pathname);}if(!token){setAuthChecking(false);return;}api<AuthUser>("/auth/me").then(current=>{setUser(current);if(oauthToken)notify(`${current.nickname||current.email}님, 환영합니다.`);}).catch(()=>{localStorage.removeItem("decisionflow_token");setAuthenticated(false);}).finally(()=>setAuthChecking(false));},[]);
-  function handleAuth(current:AuthUser,isNew:boolean){setUser(current);setAuthenticated(true);setAuthChecking(false);if(isNew){setOnboarding(true);setView("settings");}notify(`${current.nickname||current.email}님, 환영합니다.`);}
-  async function logout(){try{await api("/auth/logout",{method:"POST"});}finally{localStorage.removeItem("decisionflow_token");setUser(null);setAuthenticated(false);setOnboarding(false);setWorkspaceId(null);setModal(null);setReview(null);setSpeakerReview(null);setProjectTarget(null);setSidebarOpen(false);setView("dashboard");queryClient.clear();}}
+  useEffect(()=>{const params=new URLSearchParams(window.location.hash.includes("token=")&&!window.location.hash.includes("reset_token=")?window.location.hash.slice(1):window.location.search);if(params.get("auth_error")){sessionStorage.setItem("decisionflow_oauth_error",params.get("auth_error")!);notify(params.get("auth_error")==="google_cancelled"?"Google 로그인을 취소했습니다.":"Google 로그인에 실패했습니다. 다시 시도해 주세요.");window.history.replaceState({},document.title,window.location.pathname);}const oauthToken=params.get("token");const token=oauthToken||localStorage.getItem("decisionflow_token");if(oauthToken){localStorage.setItem("decisionflow_token",oauthToken);setAuthenticated(true);if(params.get("onboarding")==="1"){setOnboarding(true);setView("dashboard");}window.history.replaceState({},document.title,window.location.pathname);}if(!token){setAuthChecking(false);return;}api<AuthUser>("/auth/me").then(current=>{setUser(current);if(oauthToken)notify(`${current.nickname||current.email}님, 환영합니다.`);}).catch(()=>{localStorage.removeItem("decisionflow_token");setAuthenticated(false);}).finally(()=>setAuthChecking(false));},[]);
+  function handleAuth(current:AuthUser,isNew:boolean){setUser(current);setAuthenticated(true);setAuthChecking(false);if(isNew){setOnboarding(true);setView("dashboard");}notify(`${current.nickname||current.email}님, 환영합니다.`);}
+  async function logout(){try{await api("/auth/logout",{method:"POST"});}finally{localStorage.removeItem("decisionflow_token");setUser(null);setAuthenticated(false);setOnboarding(false);setWorkspaceId(null);setTaskDetailId(null);setCreatingTeam(false);setModal(null);setReview(null);setSpeakerReview(null);setProjectTarget(null);setSidebarOpen(false);setView("dashboard");queryClient.clear();}}
+  if(resetToken) return <PasswordRecovery token={resetToken} onBack={()=>window.location.assign("/")}/>;
   if(authChecking) return <div className="auth-loading">로그인 상태를 확인하는 중...</div>;
   if(!authenticated||!user) return <><AuthPage onAuth={handleAuth} onNotify={notify}/>{toast&&<div className="toast">{toast}</div>}</>;
   async function refresh(){await queryClient.invalidateQueries();notify("새로고침했습니다.");}
 
   async function onDelete(type:EntityType,id:number){if(window.confirm("이 항목을 삭제할까요?"))remove.mutate({type,id});}
-  async function onEdit(type:EntityType,id:number){let item=(data[type] as Entity[]).find(value=>value.id===id)||null;if(type==="meetings")item=await api<Meeting>(`/meetings/${id}`);setModal({type,item});}
+  async function onEdit(type:EntityType,id:number){let item=(data[type] as Entity[]).find(value=>value.id===id)||null;if(type==="actions"&&(item as ActionItem|null)?.workflow_status){setTaskDetailId(item!.id);return;}if(type==="meetings")item=await api<Meeting>(`/meetings/${id}`);setModal({type,item});}
   async function onSave(payload:Record<string,unknown>){if(!modal)return;if(modal.type==="projects"&&!modal.item&&workspaceId)payload.workspace_id=workspaceId;const id=modal.item?.id;await api(`${endpoints[modal.type]}${id?`/${id}`:""}`,{method:id?"PATCH":"POST",body:JSON.stringify(payload)});setModal(null);await queryClient.invalidateQueries();notify(id?"수정했습니다.":"저장했습니다.");}
   async function onNotion(id:number){try{const result=await api<{status:string}>(`/meetings/${id}/notion-sync`,{method:"POST"});await queryClient.invalidateQueries({queryKey:["meetings",user?.id]});notify(result.status==="ALREADY_SYNCED"?"이미 Notion에 동기화됐습니다.":"Notion에 전송했습니다.");}catch(error){notify(error instanceof Error?error.message:"Notion 전송에 실패했습니다.");}}
   async function onReview(id:number){setReviewingId(id);try{const meeting=await api<Meeting>(`/meetings/${id}`);const result=await api<{meeting_id:number;candidates:DecisionCandidate[]}>(`/meetings/${id}/decision-candidates`,{method:"POST"});setReview({meeting,candidates:result.candidates});}catch(error){notify(error instanceof Error?error.message:"결정사항 분석에 실패했습니다.");}finally{setReviewingId(null);}}
@@ -73,19 +84,36 @@ export default function App() {
   async function onSaveSpeakerNames(speakerNames:Record<string,string>){if(!speakerReview)return;const meeting=await api<Meeting>(`/meetings/${speakerReview.meeting.id}`,{method:"PATCH",body:JSON.stringify({speaker_names:speakerNames})});setSpeakerReview(current=>current?{...current,meeting}:current);await queryClient.invalidateQueries({queryKey:["meetings",user?.id]});notify("화자 이름을 저장했습니다.");}
   function openProject(id:number){setProjectTarget({projectId:id});setView("projects");}
   function openMeeting(id:number){const meeting=data.meetings.find(item=>item.id===id);if(meeting){setProjectTarget({projectId:meeting.project_id,meetingId:id});setView("projects");}}
-  function openAction(id:number){const action=data.actions.find(item=>item.id===id);if(action){setProjectTarget({projectId:action.project_id,meetingId:action.meeting_id||undefined,actionId:id});setView("projects");}}
+  function openAction(id:number){const action=data.actions.find(item=>item.id===id);if(action?.workflow_status){setTaskDetailId(id);return;}if(action){setProjectTarget({projectId:action.project_id,meetingId:action.meeting_id||undefined,actionId:id});setView("projects");}}
   function openDecision(id:number){const decision=data.decisions.find(item=>item.id===id);if(decision){setProjectTarget({projectId:decision.project_id,meetingId:decision.meeting_id||undefined,decisionId:id});setView("projects");}}
   function createAction(projectId:number,meetingId?:number){setModal({type:"actions",item:null,defaults:{project_id:projectId,...(meetingId?{meeting_id:meetingId}:{})}});}
   const common={...data,userName:user.nickname||user.email.split("@")[0],onNavigate:(next:View)=>{setView(next);setProjectTarget(null);},onNewMeeting:()=>create("meetings"),onEdit,onDelete,onNotion,onReview,reviewingId,onSummarize,summarizingId,onSpeakerAnalysis,analyzingSpeakersId,onOpenProject:openProject,onOpenMeeting:openMeeting,onOpenAction:openAction,onOpenDecision:openDecision,onCreateAction:createAction};
-  const Current={dashboard:HomeDashboard,projects:ProjectsPage,meetings:MeetingsPage,actions:ActionsPage,decisions:DecisionsPage}[view as Exclude<View,"settings"|"workflow">];
+  const Current={dashboard:HomeDashboard,projects:ProjectsPage,meetings:MeetingsPage,actions:ActionsPage,decisions:DecisionsPage}[view as Exclude<View,"settings"|"workflow"|"team">];
   function create(type?:EntityType){if(workspace?.role==="MEMBER"){notify("팀장에게 회의 또는 업무 생성을 요청해 주세요.");return;}const target=type||(view==="dashboard"?"projects":view as EntityType);if(target!=="projects"&&!data.projects.length){notify("프로젝트를 먼저 만들어 주세요.");setView("projects");return;}setModal({type:target,item:null});}
   const selectedProject=data.projects.find(project=>project.id===projectTarget?.projectId);
+  function tutorialAction(action:string){
+    setProjectTarget(null);setTaskDetailId(null);
+    if(action==="create-team"){setCreatingTeam(true);return;}
+    if(action==="team"){setView("team");return;}
+    if(action==="workflow"){setView(workspace?"workflow":"actions");return;}
+    const personal=action.startsWith("personal-");
+    if(personal)selectWorkspace(0);
+    else if(!workspace){setView("team");notify("상단에서 팀을 선택하거나 먼저 팀을 만들어 주세요.");return;}
+    else if(workspace.role==="MEMBER"){setView("workflow");notify("업무 생성과 배정은 팀장에게 요청해 주세요.");return;}
+    const available=personal?(projects.data||[]).filter(p=>p.workspace_id==null):data.projects;
+    const task=action.endsWith("task");
+    if(task&&!available.length)notify("프로젝트를 먼저 만들어 주세요.");
+    setView(task&&available.length?"actions":"projects");
+    setModal(task&&available.length?{type:"actions",item:null,defaults:{project_id:available[0].id}}:{type:"projects",item:null});
+  }
   return <div className="app-shell">
-    <Sidebar view={view} open={sidebarOpen} onCreateMeeting={()=>create("meetings")} onToggle={()=>setSidebarOpen(value=>!value)} onChange={next=>{setView(next);setProjectTarget(null);setSidebarOpen(false);}}/>
-    <main className="main-content">
-      <header className="topbar"><div><span className="kicker">WORKSPACE</span><h1>{pageNames[view]}</h1></div><div className="topbar-right"><select aria-label="Workspace 전환" value={workspaceId??0} onChange={e=>selectWorkspace(Number(e.target.value))}><option value="0">개인 프로젝트</option>{workspaces.data?.map(w=><option key={w.id} value={w.id}>{w.name} · {w.role}</option>)}</select>{view!=="settings"&&view!=="workflow"&&workspace?.role!=="MEMBER"&&<div className="top-actions"><button className="icon-control desktop-only" onClick={refresh} title="새로고침"><RefreshCw/></button><button className="button primary" onClick={()=>create(view==="dashboard"?"meetings":undefined)}><Plus/>{createNames[view==="dashboard"?"meetings":view as EntityType]}</button></div>}<div className="user-session"><UserRound/><span><b>{user.nickname||user.email.split("@")[0]}님</b><small>로그인 중</small></span><button className="icon-control" onClick={logout} title="로그아웃"><LogOut/></button></div></div></header>
-      <Suspense fallback={<div className="loading">협업 화면을 불러오는 중...</div>}>{view==="settings"?<SettingsPage onNotify={notify} onboarding={onboarding} onOnboardingComplete={()=>setOnboarding(false)}/>:view==="workflow"||(view==="dashboard"&&workspace)?<WorkflowPage key={workspace?.id||"none"} workspace={workspace} user={user} projects={data.projects} meetings={data.meetings} onNotify={notify} onSelectWorkspace={selectWorkspace}/>:loading?<div className="loading">데이터를 불러오는 중...</div>:loadError?<div className="page"><section className="panel" role="alert"><h2>데이터를 불러오지 못했습니다.</h2><p>{loadError instanceof Error?loadError.message:"잠시 후 다시 시도해 주세요."}</p><button className="button soft" onClick={refresh}>다시 시도</button></section></div>:selectedProject?<ProjectDetailPage {...common} project={selectedProject} target={projectTarget||undefined} onBack={()=>setProjectTarget(null)}/>:<Current {...common}/>}</Suspense>
+    <Sidebar onTutorial={()=>{setShowTutorial(true);setSidebarOpen(false);}} view={view} open={sidebarOpen} onCreateMeeting={()=>create("meetings")} onToggle={()=>setSidebarOpen(value=>!value)} onChange={next=>{setView(next);setProjectTarget(null);setSidebarOpen(false);}}/>
+    <main className="main-content">{taskDetailId&&<Suspense fallback={<div className="loading">업무 상세를 불러오는 중...</div>}><TaskPanel id={taskDetailId} user={user} onClose={()=>setTaskDetailId(null)} onNotify={notify}/></Suspense>}
+      <header className="topbar"><div><span className="kicker">WORKSPACE</span><h1>{pageNames[view]}</h1></div><div className="topbar-right"><button type="button" className="button soft" onClick={()=>setShowTutorial(true)}>튜토리얼 보기</button><select aria-label="Workspace 전환" value={workspaceId??0} onChange={e=>selectWorkspace(Number(e.target.value))}><option value="0">개인 프로젝트</option>{workspaces.data?.map(w=><option key={w.id} value={w.id}>{w.name} · {w.role==="MEMBER"?"팀원":"팀장"}</option>)}</select><button type="button" className="button soft" onClick={()=>setCreatingTeam(true)}><Plus/>팀 만들기</button>{view!=="settings"&&view!=="workflow"&&view!=="team"&&workspace?.role!=="MEMBER"&&<div className="top-actions"><button className="icon-control desktop-only" onClick={refresh} title="새로고침"><RefreshCw/></button><button className="button primary" onClick={()=>create(view==="dashboard"?"meetings":undefined)}><Plus/>{createNames[view==="dashboard"?"meetings":view as EntityType]}</button></div>}<div className="user-session"><UserRound/><span><b>{user.nickname||user.email.split("@")[0]}님</b><small>로그인 중</small></span><button className="icon-control" onClick={logout} title="로그아웃"><LogOut/></button></div></div></header>
+      <Suspense fallback={<div className="loading">협업 화면을 불러오는 중...</div>}>{view==="settings"?<SettingsPage onNotify={notify} onboarding={onboarding} onOnboardingComplete={()=>setOnboarding(false)}/>:view==="team"||view==="workflow"||(view==="dashboard"&&workspace)?<WorkflowPage key={`${workspace?.id||"none"}-${view==="team"?"team":"workflow"}`} teamOnly={view==="team"} workspace={workspace} user={user} projects={data.projects} meetings={data.meetings} onNotify={notify} onSelectWorkspace={selectWorkspace}/>:loading?<div className="loading">데이터를 불러오는 중...</div>:loadError?<div className="page"><section className="panel" role="alert"><h2>데이터를 불러오지 못했습니다.</h2><p>{loadError instanceof Error?loadError.message:"잠시 후 다시 시도해 주세요."}</p><button className="button soft" onClick={refresh}>다시 시도</button></section></div>:selectedProject?<ProjectDetailPage {...common} project={selectedProject} target={projectTarget||undefined} onBack={()=>setProjectTarget(null)}/>:<Current {...common}/>}</Suspense>
     </main>
+    {showTutorial&&<FirstUseTutorial onAction={tutorialAction} onClose={closeTutorial}/>}
+    {creatingTeam&&<CreateTeamModal onClose={()=>setCreatingTeam(false)} onCreated={team=>{queryClient.setQueryData<Workspace[]>(["workspaces",user.id],current=>[...(current||[]),team]);setCreatingTeam(false);selectWorkspace(team.id);setView("team");notify("팀을 만들었습니다. 팀원 메뉴에서 초대하세요.");}}/>}
     {modal&&<EntityModal {...modal} projects={data.projects} onClose={()=>setModal(null)} onSave={onSave}/>} 
     {review&&<DecisionReviewModal meeting={review.meeting} candidates={review.candidates} saving={savingReview} onClose={()=>setReview(null)} onConfirm={onConfirm}/>} 
     {speakerReview&&<SpeakerAnalysisModal meeting={speakerReview.meeting} analysis={speakerReview.analysis} saving={savingActions} onClose={()=>setSpeakerReview(null)} onConfirm={onConfirmActions} onSaveSpeakerNames={onSaveSpeakerNames}/>}

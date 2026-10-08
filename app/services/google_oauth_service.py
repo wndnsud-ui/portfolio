@@ -15,7 +15,7 @@ GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 
 
 def build_google_login_url() -> tuple[str, str]:
-    if not settings.google_client_id or not settings.google_redirect_uri:
+    if not settings.google_client_id or not settings.google_client_secret or not settings.google_redirect_uri:
         raise AppError("GOOGLE_OAUTH_NOT_CONFIGURED", "Google OAuth is not configured.", 500)
     state = secrets.token_urlsafe(24)
     params = {
@@ -51,7 +51,7 @@ async def exchange_google_code(code: str) -> dict:
 def upsert_google_user(db: Session, profile: dict) -> tuple[User, bool]:
     provider_id = profile.get("sub")
     email = (profile.get("email") or "").strip().lower()
-    if not provider_id or not email:
+    if not provider_id or not email or profile.get("email_verified") is not True:
         raise AppError("INVALID_GOOGLE_PROFILE", "Google profile is missing required identity fields.", 400)
     account = db.query(AuthAccount).filter(AuthAccount.provider == "google", AuthAccount.provider_account_id == provider_id).first()
     if account:

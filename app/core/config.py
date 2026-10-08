@@ -19,8 +19,14 @@ class Settings(BaseSettings):
     encryption_key: str = ""
     google_client_id: str = ""
     google_client_secret: str = ""
-    google_redirect_uri: str = "http://localhost:8001/api/auth/google/callback"
-    frontend_url: str = "http://localhost:5173"
+    google_redirect_uri: str = "http://127.0.0.1:8001/api/auth/google/callback"
+    frontend_url: str = "http://127.0.0.1:8001"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_ssl: bool = False
     ml_model_path: str = "app/ml/models/delay_risk.joblib"
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 

@@ -1,0 +1,23 @@
+.task-status-overview{display:grid;grid-template-columns:260px minmax(0,1fr);gap:22px;align-items:start;margin-top:16px}
+.task-status-donut{min-width:0;position:sticky;top:16px}
+.task-status-board{display:flex;gap:12px;overflow-x:auto;min-width:0;align-items:flex-start;padding:2px 2px 14px;scrollbar-color:#c6b5eb #f7f3fc;scrollbar-width:thin}
+.task-board-column{flex:1 0 210px;min-width:210px;max-width:300px;padding:10px 8px;background:#f7f5fa;border-radius:12px;--board-color:#94753f;--board-tint:#f1eadd;--board-border:#e9e2d6}
+.task-board-column.in_progress{background:#f6f3ff;--board-color:#7953cd;--board-tint:#eae1fc;--board-border:#e5dcf8}
+.task-board-column.done{background:#f0f9f5;--board-color:#218363;--board-tint:#dcefe5;--board-border:#dceee5}
+.task-board-column.cancelled{background:#f8f4f5;--board-color:#a06674;--board-tint:#f0e0e5;--board-border:#ecdde2}
+.task-board-column>header{display:flex;align-items:center;gap:7px;padding:2px 4px 11px;color:var(--board-color)}
+.task-board-column>header svg{width:15px;height:15px}
+.task-board-column>header h4{margin:0;font-size:12px;line-height:1.5;padding:2px 7px;background:var(--board-tint);border-radius:5px;font-weight:600}
+.task-board-column>header b{font-size:12px;font-weight:500}
+.task-board-cards{display:grid;gap:8px;max-height:430px;overflow-y:auto;padding:1px;scrollbar-width:thin}
+.task-board-card{display:grid;grid-template-columns:16px minmax(0,1fr);gap:8px;width:100%;padding:13px 11px;text-align:left;border:1px solid var(--board-border);border-radius:11px;background:#fff;color:var(--ink);box-shadow:0 2px 3px #33333303;transition:box-shadow .15s,border-color .15s}
+.task-board-card>svg{width:15px;height:15px;color:var(--board-color);margin-top:2px}
+.task-board-card strong{display:block;font-size:12px;font-weight:600;line-height:1.6;overflow-wrap:anywhere}
+.task-board-card small{display:block;margin-top:8px;color:var(--muted);font-size:10px;line-height:1.7}
+.task-board-card em{grid-column:2;justify-self:start;font-size:10px;font-style:normal;border-radius:5px;background:var(--board-tint);color:var(--board-color);padding:3px 6px}
+.task-board-card:hover{border-color:var(--board-color);box-shadow:0 4px 12px #6951a510}
+.task-board-card:focus-visible,.task-status-board:focus-visible{outline:2px solid #9870f0;outline-offset:2px}
+.task-board-empty{font-size:11px;color:var(--muted);margin:0;padding:18px 10px;border:1px dashed var(--board-border);border-radius:10px}
+.home-grid .status-panel{grid-column:1/-1}
+@media(max-width:1000px){.task-status-overview{grid-template-columns:220px minmax(0,1fr);gap:14px}}
+@media(max-width:700px){.task-status-overview{grid-template-columns:1fr;gap:8px}.task-status-donut{position:static;max-width:350px;width:100%;margin:auto}.task-board-column{flex-basis:230px}.task-board-cards{max-height:360px}}
