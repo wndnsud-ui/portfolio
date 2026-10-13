@@ -1,9 +1,18 @@
+import secrets
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+# Unambiguous characters (no 0/O, 1/I/L) so codes survive being read aloud or retyped.
+MEMBER_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+PLACEHOLDER_EMAIL_DOMAIN = "@users.decisionflow.invalid"
+
+
+def generate_member_code() -> str:
+    return "".join(secrets.choice(MEMBER_CODE_ALPHABET) for _ in range(8))
 
 
 class User(Base):
@@ -12,6 +21,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True, index=True)
     nickname: Mapped[str | None] = mapped_column(String(120))
+    member_code: Mapped[str] = mapped_column(String(16), unique=True, index=True, default=generate_member_code)
     password_hash: Mapped[str | None] = mapped_column(String(255))
     auth_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -21,6 +31,11 @@ class User(Base):
     settings = relationship("UserSettings", back_populates="user", uselist=False, cascade="all, delete-orphan")
     projects = relationship("Project", back_populates="user")
     blog_posts = relationship("BlogPost", back_populates="user", cascade="all, delete-orphan")
+
+    @property
+    def public_email(self) -> str | None:
+        """Email safe to show to others; None for provider placeholders such as Kakao."""
+        return None if self.email.endswith(PLACEHOLDER_EMAIL_DOMAIN) else self.email
 
 
 class PasswordReset(Base):

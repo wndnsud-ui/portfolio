@@ -1,3 +1,4 @@
+from pathlib import Path
 import io
 from unittest.mock import AsyncMock, patch
 import unittest
@@ -6,6 +7,7 @@ from app.models.meeting import Meeting
 from app.models.workflow import FinalResult
 from app.services.encryption_service import encrypt_secret
 from app.models.user import User
+from app.core.config import settings
 
 
 class WorkflowTests(unittest.TestCase):
@@ -141,6 +143,52 @@ class WorkflowTests(unittest.TestCase):
         notifications = self.client.get("/api/notifications", headers=self.member[1]).json()
         self.assertTrue(any(n["type"] == "task_mention" for n in notifications))
         self.assertEqual(self.client.patch(f"/api/notifications/{notifications[0]['id']}/read", headers=self.outsider[1]).status_code, 404)
+
+    def test_meeting_photo_attachments(self):
+        path = f"/api/meetings/{self.mid}/attachments"
+        photo = {"file": ("IMG_0001.jpg", b"\xff\xd8\xff photo", "image/jpeg")}
+        self.assertEqual(self.client.post(path, headers=self.outsider[1], files=photo).status_code, 404)
+        self.assertEqual(self.client.post(path, headers=self.owner[1], files={"file": ("run.exe", b"x", "application/octet-stream")}).status_code, 415)
+        response = self.client.post(path, headers=self.owner[1], files=photo)
+        self.assertEqual(response.status_code, 201, response.text)
+        aid = response.json()["id"]
+        self.assertNotIn("storage_key", response.json())
+        self.assertEqual(self.client.post(path, headers=self.member[1], files={"file": ("board.heic", b"heic", "image/heic")}).status_code, 201)
+        listing = self.client.get(path, headers=self.member[1]).json()
+        self.assertEqual([a["file_name"] for a in listing], ["IMG_0001.jpg", "board.heic"])
+        self.assertEqual(self.client.get(path, headers=self.outsider[1]).status_code, 404)
+        self.assertEqual(self.client.get(f"/api/meeting-attachments/{aid}", headers=self.member[1]).content, b"\xff\xd8\xff photo")
+        self.assertEqual(self.client.get(f"/api/meeting-attachments/{aid}", headers=self.outsider[1]).status_code, 404)
+        # A plain project member who neither uploaded it nor edits the meeting cannot delete it.
+        self.client.put(f"/api/workspaces/{self.workspace}/members/{self.outsider[0]}", headers=self.owner[1], json={"user_id": self.outsider[0], "role": "MEMBER"})
+        self.client.put(f"/api/projects/{self.project}/members/{self.outsider[0]}", headers=self.owner[1])
+        self.assertEqual(self.client.delete(f"/api/meeting-attachments/{aid}", headers=self.outsider[1]).status_code, 403)
+        # The meeting recorder may remove photos uploaded by others.
+        self.assertEqual(self.client.delete(f"/api/meeting-attachments/{aid}", headers=self.member[1]).status_code, 204)
+        self.assertEqual(self.client.get(f"/api/meeting-attachments/{aid}", headers=self.owner[1]).status_code, 404)
+        self.assertEqual(self.client.delete(f"/api/meetings/{self.mid}", headers=self.owner[1]).status_code, 204)
+        self.assertEqual(list(Path(settings.attachment_dir).iterdir()), [])
+
+    def test_extract_text_from_meeting_photo(self):
+        upload = lambda name: self.client.post(f"/api/meetings/{self.mid}/attachments", headers=self.owner[1], files={"file": (name, b"\xff\xd8\xff photo", "image/jpeg")}).json()["id"]
+        aid, heic = upload("board.jpg"), upload("board.heic")
+        path = f"/api/meeting-attachments/{aid}/extract-text"
+        with patch("app.services.ai_service.ai_service._structured_response", new_callable=AsyncMock, return_value={"text": " ## 결정\n- 배포 10/20 \n"}) as ai:
+            response = self.client.post(path, headers=self.member[1])
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()["text"], "## 결정\n- 배포 10/20")
+            self.assertTrue(ai.call_args.kwargs["images"][0].startswith("data:image/jpeg;base64,"))
+            self.assertEqual(self.client.post(f"/api/meeting-attachments/{heic}/extract-text", headers=self.owner[1]).status_code, 415)
+            self.assertEqual(self.client.post(path, headers=self.outsider[1]).status_code, 404)
+            # Project members who are not the recorder or a manager cannot rewrite the transcript.
+            self.client.put(f"/api/workspaces/{self.workspace}/members/{self.outsider[0]}", headers=self.owner[1], json={"user_id": self.outsider[0], "role": "MEMBER"})
+            self.client.put(f"/api/projects/{self.project}/members/{self.outsider[0]}", headers=self.owner[1])
+            self.assertEqual(self.client.post(path, headers=self.outsider[1]).status_code, 403)
+            with self.sessions() as db:
+                db.get(Meeting, self.mid).report_status = "APPROVED"
+                db.commit()
+            self.assertEqual(self.client.post(path, headers=self.owner[1]).status_code, 409)
+            self.assertEqual(ai.await_count, 1)
 
     def test_text_upload_skips_stt_and_speakers_preserve_original(self):
         with patch("app.services.transcription_service.transcription_service.transcribe", new_callable=AsyncMock) as stt:

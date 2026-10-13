@@ -23,12 +23,13 @@ from app.models.decision import Decision
 from app.models.meeting import Meeting
 from app.models.project import Project
 from app.models.user import User
-from app.models.workflow import ActivityLog, CommentMention, FinalResult, MeetingReview, Notification, TaskAttachment, TaskComment, TaskProgress, TaskReview
+from app.models.workflow import ActivityLog, CommentMention, FinalResult, MeetingAttachment, MeetingReview, Notification, TaskAttachment, TaskComment, TaskProgress, TaskReview
 from app.models.workflow import TranscriptionJob
 from app.schemas.action_item import ActionItemRead
 from app.services.permissions import is_project_manager, require_meeting_editor, require_project_manager, require_task_access, visible_projects, workspace_role
 from app.services.workflow_service import activity, notify, project_users, transition
 from app.services.risk_service import risk_service
+from app.services.ai_service import ai_service
 
 router = APIRouter(tags=["Workflow"])
 
@@ -302,29 +303,108 @@ def delete_comment(comment_id: int, db: Session = Depends(get_db), user: User = 
     db.commit()
 
 
-@router.post("/tasks/{task_id}/attachments", status_code=201)
-async def add_attachment(task_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    get_task(db, task_id, user)
+# Phone cameras produce JPEG/HEIC/WebP; HEIC is stored as-is when the browser cannot convert it.
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".heic", ".heif"}
+ATTACHMENT_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".txt", ".md"} | IMAGE_EXTENSIONS
+MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
+
+
+async def store_upload(file: UploadFile) -> tuple[str, str, str, int]:
     filename = Path((file.filename or "file").replace("\\", "/")).name
     extension = Path(filename).suffix.lower()
-    if extension not in {".pdf", ".docx", ".xlsx", ".png", ".jpg", ".jpeg", ".txt", ".md"}:
+    if extension not in ATTACHMENT_EXTENSIONS:
         raise AppError("UNSUPPORTED_FILE", "Unsupported attachment type.", 415)
-    data = await file.read(20 * 1024 * 1024 + 1)
-    if not data or len(data) > 20 * 1024 * 1024:
+    data = await file.read(MAX_ATTACHMENT_BYTES + 1)
+    if not data or len(data) > MAX_ATTACHMENT_BYTES:
         raise AppError("FILE_SIZE", "Attachment must be between 1 byte and 20 MB.", 413)
     root = Path(settings.attachment_dir)
     root.mkdir(parents=True, exist_ok=True)
     key = uuid4().hex + extension
-    path = root / key
-    path.write_bytes(data)
-    attachment = TaskAttachment(task_id=task_id, uploaded_by=user.id, file_name=filename[:255], storage_key=key, file_type=extension, size=len(data))
+    (root / key).write_bytes(data)
+    return filename[:255], key, extension, len(data)
+
+
+def save_attachment(db, attachment):
     try:
         db.add(attachment)
         db.commit()
     except Exception:
-        path.unlink(missing_ok=True)
+        (Path(settings.attachment_dir) / attachment.storage_key).unlink(missing_ok=True)
         raise
     return record(attachment)
+
+
+def attachment_response(attachment):
+    path = Path(settings.attachment_dir) / attachment.storage_key
+    if not path.is_file():
+        raise AppError("FILE_NOT_FOUND", "Attachment file unavailable.", 404)
+    return FileResponse(path, filename=attachment.file_name, media_type="application/octet-stream", headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+
+@router.post("/tasks/{task_id}/attachments", status_code=201)
+async def add_attachment(task_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    get_task(db, task_id, user)
+    name, key, extension, size = await store_upload(file)
+    return save_attachment(db, TaskAttachment(task_id=task_id, uploaded_by=user.id, file_name=name, storage_key=key, file_type=extension, size=size))
+
+
+@router.get("/meetings/{meeting_id}/attachments")
+def meeting_attachments(meeting_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    get_meeting_or_404(db, meeting_id, user)
+    rows = db.query(MeetingAttachment, User).join(User, User.id == MeetingAttachment.uploaded_by).filter(MeetingAttachment.meeting_id == meeting_id).order_by(MeetingAttachment.created_at, MeetingAttachment.id).all()
+    return [record(a) | {"author": u.nickname or u.public_email or "", "user_id": u.id} for a, u in rows]
+
+
+@router.post("/meetings/{meeting_id}/attachments", status_code=201)
+async def add_meeting_attachment(meeting_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    # Any project member who can see the meeting may add photos of the board or paper minutes.
+    get_meeting_or_404(db, meeting_id, user)
+    name, key, extension, size = await store_upload(file)
+    return save_attachment(db, MeetingAttachment(meeting_id=meeting_id, uploaded_by=user.id, file_name=name, storage_key=key, file_type=extension, size=size))
+
+
+@router.get("/meeting-attachments/{attachment_id}")
+def download_meeting_attachment(attachment_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    attachment = db.get(MeetingAttachment, attachment_id)
+    if not attachment:
+        raise AppError("FILE_NOT_FOUND", "Attachment not found.", 404)
+    get_meeting_or_404(db, attachment.meeting_id, user)
+    return attachment_response(attachment)
+
+
+@router.post("/meeting-attachments/{attachment_id}/extract-text")
+async def extract_meeting_attachment_text(attachment_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Reads text from a meeting photo; the caller reviews it before saving it into the transcript."""
+    attachment = db.get(MeetingAttachment, attachment_id)
+    if not attachment:
+        raise AppError("FILE_NOT_FOUND", "Attachment not found.", 404)
+    meeting = get_meeting_or_404(db, attachment.meeting_id, user)
+    require_meeting_editor(db, meeting, user.id)
+    if meeting.report_status in {"TRANSCRIBING", "MANAGER_REVIEW", "APPROVED", "PUBLISHED"}:
+        raise AppError("REVIEW_LOCKED", "Return meeting for changes before editing.", 409)
+    path = Path(settings.attachment_dir) / attachment.storage_key
+    if not path.is_file():
+        raise AppError("FILE_NOT_FOUND", "Attachment file unavailable.", 404)
+    data, extension = path.read_bytes(), attachment.file_type
+    db.close()  # Release the connection while waiting on the AI call.
+    return {"attachment_id": attachment_id, "text": await ai_service.extract_text_from_image(data, extension)}
+
+
+@router.delete("/meeting-attachments/{attachment_id}", status_code=204)
+def remove_meeting_attachment(attachment_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    attachment = db.get(MeetingAttachment, attachment_id)
+    if not attachment:
+        raise AppError("FILE_NOT_FOUND", "Attachment not found.", 404)
+    meeting = get_meeting_or_404(db, attachment.meeting_id, user)
+    if attachment.uploaded_by != user.id:
+        try:
+            require_meeting_editor(db, meeting, user.id)
+        except AppError:
+            raise AppError("FORBIDDEN", "Only uploader, recorder or project manager can delete files.", 403)
+    key = attachment.storage_key
+    db.delete(attachment)
+    db.commit()
+    (Path(settings.attachment_dir) / key).unlink(missing_ok=True)
 
 
 @router.get("/task-attachments/{attachment_id}")
@@ -333,10 +413,7 @@ def download_attachment(attachment_id: int, db: Session = Depends(get_db), user:
     if not attachment:
         raise AppError("FILE_NOT_FOUND", "Attachment not found.", 404)
     get_task(db, attachment.task_id, user)
-    path = Path(settings.attachment_dir) / attachment.storage_key
-    if not path.is_file():
-        raise AppError("FILE_NOT_FOUND", "Attachment file unavailable.", 404)
-    return FileResponse(path, filename=attachment.file_name, media_type="application/octet-stream", headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+    return attachment_response(attachment)
 
 
 @router.delete("/task-attachments/{attachment_id}", status_code=204)

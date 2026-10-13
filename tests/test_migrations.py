@@ -30,7 +30,7 @@ class MigrationTests(unittest.TestCase):
                     columns = {column["name"] for column in inspect(engine).get_columns("action_items")}
                     self.assertTrue({"progress_percent", "progress_updated_at", "progress_content"} <= columns)
                     with engine.connect() as connection:
-                        self.assertEqual(connection.execute(text("SELECT version_num FROM alembic_version")).scalar(), "0006_example_projects")
+                        self.assertEqual(connection.execute(text("SELECT version_num FROM alembic_version")).scalar(), "0009_meeting_attachments")
                         self.assertIn("password_resets", inspect(engine).get_table_names())
                         if legacy:
                             self.assertEqual(connection.execute(text("SELECT name FROM projects WHERE id=1")).scalar(), "Preserved")

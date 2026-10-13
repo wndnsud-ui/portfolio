@@ -16,8 +16,58 @@ from app.schemas.auth import AuthResponse, LoginRequest, RegisterRequest, UserRe
 from app.services.auth_service import authenticate, create_access_token, create_user
 from app.services.encryption_service import encrypt_secret
 from app.services.google_oauth_service import build_google_login_url, exchange_google_code, upsert_google_user
+from app.services.kakao_oauth_service import exchange_kakao_code, upsert_kakao_user
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+
+
+@router.get("/kakao/status")
+async def kakao_status() -> dict[str, bool]:
+    return {"configured": bool(settings.kakao_client_id.strip() and settings.kakao_redirect_uri.strip())}
+
+
+@router.get("/kakao")
+async def kakao_login() -> RedirectResponse:
+    from app.services.kakao_oauth_service import build_kakao_login_url
+
+    url, state = build_kakao_login_url()
+    redirect = RedirectResponse(url, headers={"Cache-Control": "no-store"})
+    redirect.set_cookie(
+        "kakao_oauth_state", state, httponly=True,
+        secure=settings.app_env == "production", samesite="lax", max_age=600,
+        path="/api/auth/kakao",
+    )
+    return redirect
+
+@router.get("/kakao/callback")
+async def kakao_callback(
+    code: str | None = Query(default=None),
+    state: str | None = Query(default=None),
+    error: str | None = Query(default=None),
+    kakao_oauth_state: str | None = Cookie(default=None),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    reason = None
+    if not state or not kakao_oauth_state or not hmac.compare_digest(state, kakao_oauth_state):
+        reason = "kakao_state"
+    elif error or not code:
+        reason = "kakao_cancelled"
+    else:
+        try:
+            profile = await exchange_kakao_code(code)
+            user, created = upsert_kakao_user(db, profile)
+        except (httpx.HTTPError, KeyError, ValueError, TypeError, AppError) as exc:
+            reason = "kakao_network" if isinstance(exc, httpx.RequestError) else "kakao_failed"
+            logging.getLogger(__name__).warning("Kakao OAuth failed: %s", reason)
+    headers = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}
+    frontend = settings.frontend_url.rstrip("/")
+    if reason:
+        redirect = RedirectResponse(f"{frontend}/?auth_error={reason}", headers=headers)
+    else:
+        redirect = RedirectResponse(f"{frontend}/#token={create_access_token(user)}&onboarding={int(created)}", headers=headers)
+    redirect.delete_cookie("kakao_oauth_state", path="/api/auth/kakao")
+    return redirect
+
 
 class ForgotPassword(BaseModel):
     email: str = Field(min_length=3, max_length=320)
@@ -75,7 +125,7 @@ def delete_example_data(db: Session = Depends(get_db), user: User = Depends(get_
     from app.models.project import Project
     from app.models.workflow import FinalResult, TaskProgress
     from app.models.action_item import ActionItem
-    from app.models.workflow import TaskComment, TaskReview, ActivityLog, Notification, TaskAttachment, CommentMention, MeetingReview
+    from app.models.workflow import TaskComment, TaskReview, ActivityLog, Notification, TaskAttachment, CommentMention, MeetingReview, MeetingAttachment
     # SQLite development connections may not enforce FK cascades.
     for project in db.query(Project).filter_by(user_id=user.id, workspace_id=None, is_example=True).all():
         ids = [t.id for t in project.action_items]
@@ -89,6 +139,7 @@ def delete_example_data(db: Session = Depends(get_db), user: User = Depends(get_
         meeting_ids = [m.id for m in project.meetings]
         if meeting_ids:
             db.query(MeetingReview).filter(MeetingReview.meeting_id.in_(meeting_ids)).delete(synchronize_session=False)
+            db.query(MeetingAttachment).filter(MeetingAttachment.meeting_id.in_(meeting_ids)).delete(synchronize_session=False)
             db.query(Notification).filter(Notification.target_type=="meeting", Notification.target_id.in_(meeting_ids)).delete(synchronize_session=False)
         db.query(ActivityLog).filter_by(project_id=project.id).delete(synchronize_session=False)
         db.delete(project)

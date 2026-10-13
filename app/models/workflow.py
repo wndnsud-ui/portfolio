@@ -96,6 +96,19 @@ class TaskAttachment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class MeetingAttachment(Base):
+    """Photos of whiteboards or paper minutes and other files attached to a meeting."""
+    __tablename__ = "meeting_attachments"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    meeting_id: Mapped[int] = mapped_column(ForeignKey("meetings.id", ondelete="CASCADE"), index=True)
+    uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    file_name: Mapped[str] = mapped_column(String(255))
+    storage_key: Mapped[str] = mapped_column(String(80), unique=True)
+    file_type: Mapped[str] = mapped_column(String(20))
+    size: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class FinalResult(Base):
     __tablename__ = "final_results"
     id: Mapped[int] = mapped_column(primary_key=True)

@@ -35,7 +35,8 @@ class WorkspaceInvite(Base):
     __tablename__ = "workspace_invites"
     id: Mapped[int] = mapped_column(primary_key=True)
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), index=True)
-    email: Mapped[str] = mapped_column(String(320))
+    # None means a single-use link invite that anyone holding the token may accept.
+    email: Mapped[str | None] = mapped_column(String(320))
     role: Mapped[str] = mapped_column(String(20))
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime)

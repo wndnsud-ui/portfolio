@@ -8,7 +8,7 @@ export interface ActionItem { progress_percent?:number|null; progress_updated_at
 export interface Decision { id:number; project_id:number; meeting_id:number | null; topic:string; value:string; status:string; created_at:string; updated_at:string; }
 export interface DecisionCandidate { topic:string; value:string; evidence:string; confidence:number; }
 export type Entity = Project | Meeting | ActionItem | Decision;
-export interface AuthUser { id:number; email:string; nickname:string | null; created_at:string; }
+export interface AuthUser { id:number; email:string; nickname:string | null; member_code?:string | null; created_at:string; }
 export interface SpeakerIssue { speaker:string; points:string[]; stance:string; }
 export interface ActionItemCandidate { task:string; assignee:string|null; due_date:string|null; priority:string; evidence:string; confidence:number; }
 export interface SpeakerAnalysis { meeting_id:number; summary:string; issues:string[]; speakers:SpeakerIssue[]; action_items:ActionItemCandidate[]; }

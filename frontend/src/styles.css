@@ -57,6 +57,9 @@
 .workflow-modal progress { width:100%; accent-color:#635bff; }
 .workflow-json { min-height:220px; font-family:monospace; }
 .invite-token { overflow-wrap:anywhere; user-select:all; }
+.member-code { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:8px 0 0; }
+.member-code small { flex-basis:100%; color:var(--muted); }
+.invite-result { display:grid; gap:6px; margin:8px 0 16px; }
 .topbar-right > select { max-width:240px; }
 @media(max-width:700px) {
  .workflow-page .metric-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }

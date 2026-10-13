@@ -1,3 +1,4 @@
+from pathlib import Path
 from app.models.project import Project
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import or_
@@ -7,6 +8,7 @@ from app.api.projects import get_project_or_404
 from app.services.permissions import visible_projects, require_project_manager, workspace_role, require_meeting_editor
 from app.services.workflow_service import validate_project_user, activity
 from app.api.deps import get_current_user
+from app.core.config import settings
 from app.core.exceptions import AppError
 from app.db.session import get_db
 from app.models.action_item import ActionItem
@@ -127,8 +129,14 @@ async def update_meeting(meeting_id: int, payload: MeetingUpdate, db: Session = 
 async def delete_meeting(meeting_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> None:
     meeting = get_meeting_or_404(db, meeting_id, current_user)
     require_project_manager(db, db.get(Project, meeting.project_id), current_user.id)
+    from app.models.workflow import MeetingAttachment
+    keys = [a.storage_key for a in db.query(MeetingAttachment).filter_by(meeting_id=meeting_id)]
+    # SQLite development connections may not enforce FK cascades.
+    db.query(MeetingAttachment).filter_by(meeting_id=meeting_id).delete(synchronize_session=False)
     db.delete(meeting)
     db.commit()
+    for key in keys:
+        (Path(settings.attachment_dir) / key).unlink(missing_ok=True)
 
 
 @router.post("/{meeting_id}/analyze")

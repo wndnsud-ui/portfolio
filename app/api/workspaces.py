@@ -30,7 +30,14 @@ class MemberCreate(BaseModel):
 
 
 class InviteCreate(BaseModel):
-    email: str = Field(min_length=3, max_length=320)
+    # Optional: without an email the invite is a single-use link anyone holding it can accept.
+    email: str | None = Field(default=None, max_length=320)
+    role: Literal["MANAGER", "MEMBER"] = "MEMBER"
+
+
+class MemberAdd(BaseModel):
+    email: str | None = Field(default=None, max_length=320)
+    member_code: str | None = Field(default=None, max_length=16)
     role: Literal["MANAGER", "MEMBER"] = "MEMBER"
 
 
@@ -64,13 +71,13 @@ def invite(workspace_id: int, payload: InviteCreate, db: Session = Depends(get_d
     actor_role = workspace_role(db, workspace_id, user.id)
     if actor_role not in {"OWNER", "MANAGER"} or (actor_role == "MANAGER" and payload.role != "MEMBER"):
         raise AppError("FORBIDDEN", "팀장은 팀원만 초대할 수 있습니다.", 403)
-    email = payload.email.strip().lower()
-    if "@" not in email:
-        raise AppError("INVALID_EMAIL", "Email is required.", 400)
+    email = (payload.email or "").strip().lower() or None
+    if email and "@" not in email:
+        raise AppError("INVALID_EMAIL", "올바른 이메일을 입력하거나 비워 두고 초대 링크를 만드세요.", 400)
     token = secrets.token_urlsafe(32)
     db.add(WorkspaceInvite(workspace_id=workspace_id, email=email, role=payload.role,
         token_hash=hashlib.sha256(token.encode()).hexdigest(), expires_at=datetime.utcnow() + timedelta(days=7)))
-    existing = db.query(User).filter_by(email=email).first()
+    existing = db.query(User).filter_by(email=email).first() if email else None
     if existing:
         notify(db, [existing.id], "workspace_invite", db.get(Workspace, workspace_id).name, "workspace", workspace_id, "Workspace 초대를 받았습니다.", user.id)
     db.commit()
@@ -78,19 +85,23 @@ def invite(workspace_id: int, payload: InviteCreate, db: Session = Depends(get_d
 
 
 @router.post("/workspaces/{workspace_id}/members", status_code=201)
-def add_member_by_email(workspace_id: int, payload: InviteCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def add_member(workspace_id: int, payload: MemberAdd, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     actor_role = workspace_role(db, workspace_id, user.id)
     if actor_role not in {"OWNER", "MANAGER"} or payload.role != "MEMBER":
         raise AppError("FORBIDDEN", "팀원 추가 권한이 필요합니다.", 403)
-    target = db.query(User).filter_by(email=payload.email.strip().lower()).first()
+    email = (payload.email or "").strip().lower()
+    code = (payload.member_code or "").strip().upper().replace("-", "").replace(" ", "")
+    if bool(email) == bool(code):
+        raise AppError("INVALID_MEMBER", "이메일 또는 회원 코드 중 하나를 입력해 주세요.", 400)
+    target = db.query(User).filter_by(email=email).first() if email else db.query(User).filter_by(member_code=code).first()
     if not target:
-        raise AppError("USER_NOT_FOUND", "가입된 계정이 없습니다. 초대 코드를 생성해 전달해 주세요.", 404)
+        raise AppError("USER_NOT_FOUND", "가입된 계정이 없습니다. 회원 코드를 다시 확인하거나 초대 링크를 만들어 전달해 주세요.", 404)
     if db.query(WorkspaceMember).filter_by(workspace_id=workspace_id, user_id=target.id).first():
         raise AppError("ALREADY_MEMBER", "이미 Workspace에 등록된 팀원입니다.", 409)
     db.add(WorkspaceMember(workspace_id=workspace_id, user_id=target.id, role="MEMBER"))
     notify(db, [target.id], "workspace_member_added", db.get(Workspace, workspace_id).name, "workspace", workspace_id, "Workspace 팀원으로 추가되었습니다.", user.id)
     db.commit()
-    return {"user_id": target.id, "email": target.email, "role": "MEMBER"}
+    return {"user_id": target.id, "nickname": target.nickname, "email": target.public_email, "member_code": target.member_code, "role": "MEMBER"}
 
 
 @router.post("/workspace-invites/accept")
@@ -98,10 +109,10 @@ def accept_invite(payload: InviteAccept, db: Session = Depends(get_db), user: Us
     invitation = db.query(WorkspaceInvite).filter_by(token_hash=hashlib.sha256(payload.token.encode()).hexdigest()).with_for_update().first()
     if not invitation:
         raise AppError("INVALID_INVITE", "초대 코드를 찾을 수 없습니다. 코드만 복사해 입력해 주세요.", 400)
-    if invitation.email.strip().lower() != user.email.strip().lower():
-        raise AppError("INVITE_EMAIL_MISMATCH", "초대받은 이메일과 로그인 계정이 다릅니다. 초대받은 계정으로 로그인해 주세요.", 400)
+    if invitation.email and invitation.email.strip().lower() != user.email.strip().lower():
+        raise AppError("INVITE_EMAIL_MISMATCH", "초대받은 이메일과 로그인 계정이 다릅니다. 초대받은 계정으로 로그인하거나 팀장에게 초대 링크를 요청해 주세요.", 400)
     if invitation.accepted_at:
-        raise AppError("INVITE_USED", "이미 수락한 초대입니다. 상단에서 해당 팀을 선택해 주세요.", 400)
+        raise AppError("INVITE_USED", "이미 사용된 초대입니다. 이미 수락했다면 상단에서 팀을 선택하고, 아니라면 팀장에게 새 초대를 요청해 주세요.", 400)
     if invitation.expires_at < datetime.utcnow():
         raise AppError("INVITE_EXPIRED", "초대 코드가 만료되었습니다. 팀장에게 새 코드를 요청해 주세요.", 400)
     if not db.query(WorkspaceMember).filter_by(workspace_id=invitation.workspace_id, user_id=user.id).first():
@@ -130,7 +141,7 @@ def remove_member(workspace_id: int, member_id: int, db: Session = Depends(get_d
 def project_members(project_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     project = get_project_or_404(db, project_id, user)
     from app.services.workflow_service import project_users
-    return [{"user_id": p.id, "nickname": p.nickname, "email": p.email} for p in db.query(User).filter(User.id.in_(project_users(db, project.id))).all()]
+    return [{"user_id": p.id, "nickname": p.nickname, "email": p.public_email, "member_code": p.member_code} for p in db.query(User).filter(User.id.in_(project_users(db, project.id))).all()]
 
 
 @router.delete("/projects/{project_id}/members/{member_id}", status_code=204)
@@ -181,7 +192,7 @@ def create_workspace(payload: WorkspaceCreate, db: Session = Depends(get_db), us
 def list_members(workspace_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     workspace_role(db, workspace_id, user.id)
     rows = db.query(WorkspaceMember, User).join(User, User.id == WorkspaceMember.user_id).filter(WorkspaceMember.workspace_id == workspace_id).all()
-    return [{"user_id": u.id, "nickname": u.nickname, "email": u.email, "role": m.role} for m, u in rows]
+    return [{"user_id": u.id, "nickname": u.nickname, "email": u.public_email, "member_code": u.member_code, "role": m.role} for m, u in rows]
 
 
 @router.put("/workspaces/{workspace_id}/members/{member_id}")
