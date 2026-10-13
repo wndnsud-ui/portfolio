@@ -35,6 +35,37 @@ class WorkflowTests(unittest.TestCase):
     def action(self, name, user=None, content=""):
         return self.client.post(f"/api/tasks/{self.tid}/{name}", headers=(user or self.member)[1], json={"content": content})
 
+    def test_personal_project_confirms_without_approval(self):
+        payload = {"action_items": [{"task": "Write draft", "priority": "medium"}]}
+        response = self.client.post(f"/api/meetings/{self.mid}/action-items/confirm", headers=self.owner[1], json=payload)
+        self.assertEqual(response.status_code, 409, response.text)
+        project = self.client.post("/api/projects", headers=self.owner[1], json={"name": "Solo"}).json()
+        self.assertIsNone(project["workspace_id"])
+        meeting = self.client.post("/api/meetings", headers=self.owner[1], json={"project_id": project["id"],
+            "title": "Solo sync", "meeting_date": "2026-10-04", "transcript": "Speaker 1: 정리"}).json()
+        response = self.client.post(f"/api/meetings/{meeting['id']}/action-items/confirm", headers=self.owner[1], json=payload)
+        self.assertEqual(response.status_code, 200, response.text)
+        response = self.client.post(f"/api/meetings/{meeting['id']}/decisions/confirm", headers=self.owner[1],
+            json={"decisions": [{"topic": "Scope", "value": "MVP only"}]})
+        self.assertEqual(response.status_code, 200, response.text)
+
+    def test_personal_task_assignment_skips_meeting_approval(self):
+        project = self.client.post("/api/projects", headers=self.owner[1], json={"name": "Personal assignment"}).json()
+        meeting = self.client.post("/api/meetings", headers=self.owner[1], json={"project_id": project["id"],
+            "title": "Personal draft", "meeting_date": "2026-10-04"}).json()
+        payload = {"project_id": project["id"], "meeting_id": meeting["id"],
+            "task": "Personal work", "assignee_id": self.owner[0]}
+        created = self.client.post("/api/action-items", headers=self.owner[1], json=payload)
+        self.assertEqual(created.status_code, 200, created.text)
+        unassigned = self.client.post("/api/action-items", headers=self.owner[1],
+            json={**payload, "assignee_id": None}).json()
+        updated = self.client.patch(f"/api/action-items/{unassigned['id']}", headers=self.owner[1],
+            json={"assignee_id": self.owner[0]})
+        self.assertEqual(updated.status_code, 200, updated.text)
+        blocked = self.client.post("/api/action-items", headers=self.owner[1],
+            json={"project_id": self.project, "meeting_id": self.mid, "task": "Team work", "assignee_id": self.member[0]})
+        self.assertEqual(blocked.status_code, 409, blocked.text)
+
     def test_explicit_progress_and_dashboard_review_counts(self):
         self.action("accept")
         self.action("start")

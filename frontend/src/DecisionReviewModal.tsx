@@ -2,9 +2,11 @@ import { CheckCircle2, X } from "lucide-react";
 import { useState } from "react";
 import type { DecisionCandidate, Meeting } from "./types";
 
-interface Props { meeting:Meeting; candidates:DecisionCandidate[]; saving:boolean; onClose:()=>void; onConfirm:(items:DecisionCandidate[])=>void; }
+interface Props { meeting:Meeting; candidates:DecisionCandidate[]; saving:boolean; onClose:()=>void; personal?:boolean; onConfirm:(items:DecisionCandidate[])=>void; }
 
-export default function DecisionReviewModal({meeting,candidates,saving,onClose,onConfirm}:Props) {
+export default function DecisionReviewModal({meeting,personal=false,candidates,saving,onClose,onConfirm}:Props) {
+  // Team meetings need an approved report before confirming; personal projects skip approval.
+  const approved=personal||["APPROVED","PUBLISHED"].includes(meeting.report_status||"");
   const [items,setItems]=useState(()=>candidates.map(candidate=>({...candidate,selected:true})));
   const selected=items.filter(item=>item.selected&&item.topic.trim()&&item.value.trim());
   function update(index:number,field:"topic"|"value",value:string){setItems(current=>current.map((item,itemIndex)=>itemIndex===index?{...item,[field]:value}:item));}
@@ -19,7 +21,7 @@ export default function DecisionReviewModal({meeting,candidates,saving,onClose,o
           <blockquote><span>원문 근거</span>{item.evidence}</blockquote>
         </article>):<div className="empty review-empty"><CheckCircle2/><b>확정할 결정사항이 없습니다.</b><span>명시적으로 합의된 문장이 회의록에서 발견되지 않았습니다.</span></div>}
       </div>
-      <footer><span className="selection-count">{selected.length}개 선택</span><button className="button ghost" onClick={onClose}>취소</button><button className="button primary" disabled={!selected.length||saving} onClick={()=>onConfirm(selected)}><CheckCircle2/>{saving?"저장 중...":"선택 항목 확정"}</button></footer>
+      <footer>{!approved&&<small className="approval-note">회의록이 팀장 승인을 받은 뒤에 확정할 수 있습니다. 협업 공간 › 담당 회의에서 검토를 요청하세요.</small>}<span className="selection-count">{selected.length}개 선택</span><button className="button ghost" onClick={onClose}>취소</button><button className="button primary" disabled={!approved||!selected.length||saving} onClick={()=>onConfirm(selected)}><CheckCircle2/>{saving?"저장 중...":approved?"선택 항목 확정":"승인 후 확정 가능"}</button></footer>
     </section>
   </div>;
 }

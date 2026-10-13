@@ -1,5 +1,5 @@
 import { CheckCircle2, CircleDot, Clock3, XCircle } from "lucide-react";
-import StreamlitStatusChart from "./StreamlitStatusChart";
+import StatusChart from "./StatusChart";
 import type { ActionItem } from "./types";
 import "./TaskStatusOverview.css";
 
@@ -19,7 +19,7 @@ export default function TaskStatusOverview({tasks,onOpenTask,loading=false}:{tas
   if (loading) return <p role="status">업무 상태를 불러오는 중...</p>;
   const grouped = groups.map(group=>({...group,tasks:tasks.filter(task=>task.status===group.key)}));
   return <div className="task-status-overview">
-    <div className="task-status-donut"><StreamlitStatusChart groups={grouped.map(g=>({key:g.key,label:g.label,count:g.tasks.length}))}/></div>
+    <div className="task-status-donut"><StatusChart groups={grouped.map(g=>({key:g.key,label:g.label,count:g.tasks.length}))}/></div>
     <div className="task-status-board" role="region" aria-label="상태별 업무 보드" tabIndex={0}>
       {grouped.map(({key,label,Icon,tasks:items})=><section className={`task-board-column ${key}`} key={key} aria-label={`${label} 업무 ${items.length}개`}>
         <header><Icon aria-hidden="true"/><h4>{label}</h4><b>{items.length}</b></header>

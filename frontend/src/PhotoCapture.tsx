@@ -1,5 +1,5 @@
 import { Camera, ImagePlus, ScanText, Trash2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiBaseUrl } from "./api";
@@ -41,11 +41,40 @@ export async function uploadFiles(path:string,files:File[],onProgress?:(done:num
   onProgress?.(files.length,files.length);
 }
 
-/** Camera button opens the rear camera directly on phones; the other picks existing photos or documents. */
+// Desktop browsers ignore the capture attribute and open a file dialog, so PCs take the photo through the webcam instead.
+const prefersNativeCamera=()=>window.matchMedia?.("(pointer: coarse)").matches??false;
+
+/** Live webcam preview that hands back a single JPEG frame. */
+function WebcamDialog({onCapture,onClose}:{onCapture:(file:File)=>void;onClose:()=>void}){
+  const video=useRef<HTMLVideoElement>(null);const [error,setError]=useState("");const [ready,setReady]=useState(false);
+  useEffect(()=>{
+    let stream:MediaStream|null=null;let alive=true;
+    if(!navigator.mediaDevices?.getUserMedia){setError("이 브라우저에서는 카메라를 쓸 수 없습니다. 사진 · 파일 선택을 이용해 주세요.");return;}
+    navigator.mediaDevices.getUserMedia({video:{facingMode:"environment",width:{ideal:1920},height:{ideal:1080}},audio:false}).then(value=>{
+      if(!alive){value.getTracks().forEach(track=>track.stop());return;}
+      stream=value;if(video.current){video.current.srcObject=value;void video.current.play();}
+    }).catch(e=>setError(e instanceof DOMException&&e.name==="NotAllowedError"?"카메라 권한을 허용해 주세요.":e instanceof DOMException&&e.name==="NotFoundError"?"연결된 카메라가 없습니다. 사진 · 파일 선택을 이용해 주세요.":"카메라를 시작하지 못했습니다."));
+    return()=>{alive=false;stream?.getTracks().forEach(track=>track.stop());};
+  },[]);
+  function shoot(){
+    const v=video.current;if(!v?.videoWidth)return;
+    const canvas=document.createElement("canvas");canvas.width=v.videoWidth;canvas.height=v.videoHeight;canvas.getContext("2d")!.drawImage(v,0,0);
+    canvas.toBlob(blob=>{if(blob){onCapture(new File([blob],`${stampName()}.jpg`,{type:"image/jpeg"}));onClose();}},"image/jpeg",0.9);
+  }
+  return <div className="webcam-dialog" role="dialog" aria-modal="true" aria-label="사진 촬영">
+    <div className="webcam-panel">{error?<p role="alert">{error}</p>:<video ref={video} playsInline muted onLoadedData={()=>setReady(true)}/>}
+      <div className="capture-buttons"><button type="button" className="button primary" disabled={!ready||!!error} onClick={shoot}><Camera/>촬영</button><button type="button" className="button ghost" onClick={onClose}>닫기</button></div></div>
+  </div>;
+}
+
+/** Camera button opens the rear camera directly on phones and the webcam on PCs; the other picks existing photos or documents. */
 export function CaptureButtons({onFiles,disabled,status}:{onFiles:(files:File[])=>void;disabled?:boolean;status?:string}){
   const pick=(e:React.ChangeEvent<HTMLInputElement>)=>{const files=[...(e.target.files||[])];e.target.value="";if(files.length)onFiles(files);};
+  const [webcam,setWebcam]=useState(false);
   return <div className="capture-buttons">
-    <label className={`button primary capture-button ${disabled?"disabled":""}`}><Camera/>사진 촬영<input type="file" accept="image/*" capture="environment" disabled={disabled} onChange={pick}/></label>
+    {prefersNativeCamera()?<label className={`button primary capture-button ${disabled?"disabled":""}`}><Camera/>사진 촬영<input type="file" accept="image/*" capture="environment" disabled={disabled} onChange={pick}/></label>
+      :<button type="button" className="button primary capture-button" disabled={disabled} onClick={()=>setWebcam(true)}><Camera/>사진 촬영</button>}
+    {webcam&&<WebcamDialog onCapture={file=>onFiles([file])} onClose={()=>setWebcam(false)}/>}
     <label className={`button soft capture-button ${disabled?"disabled":""}`}><ImagePlus/>사진 · 파일 선택<input type="file" multiple accept={ATTACHMENT_ACCEPT} disabled={disabled} onChange={pick}/></label>
     {status&&<span role="status">{status}</span>}
   </div>;

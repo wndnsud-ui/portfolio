@@ -7,11 +7,13 @@ interface Props {
   analysis:SpeakerAnalysis;
   saving:boolean;
   onClose:()=>void;
-  onConfirm:(items:ActionItemCandidate[])=>void;
+  personal?:boolean; onConfirm:(items:ActionItemCandidate[])=>void;
   onSaveSpeakerNames:(speakerNames:Record<string,string>)=>Promise<void>;
 }
 
-export default function SpeakerAnalysisModal({meeting,analysis,saving,onClose,onConfirm,onSaveSpeakerNames}:Props) {
+export default function SpeakerAnalysisModal({meeting,personal=false,analysis,saving,onClose,onConfirm,onSaveSpeakerNames}:Props) {
+  // Team meetings need an approved report before confirming; personal projects skip approval.
+  const approved=personal||["APPROVED","PUBLISHED"].includes(meeting.report_status||"");
   const [items,setItems]=useState(()=>analysis.action_items.map(item=>({...item,selected:true})));
   const [speakerNames,setSpeakerNames]=useState<Record<string,string>>(meeting.speaker_names||{});
   const [editingSpeaker,setEditingSpeaker]=useState<string|null>(null);
@@ -31,7 +33,7 @@ export default function SpeakerAnalysisModal({meeting,analysis,saving,onClose,on
         <h3>Action Item 후보</h3>
         {items.length?items.map((item,index)=><article className={`candidate ${item.selected?"selected":""}`} key={`${item.task}-${index}`}><label className="candidate-select"><input type="checkbox" checked={item.selected} onChange={event=>setItems(current=>current.map((value,itemIndex)=>itemIndex===index?{...value,selected:event.target.checked}:value))}/><span>업무로 저장</span><b>{Math.round(item.confidence*100)}%</b></label><label>업무<input value={item.task} disabled={!item.selected} onChange={event=>update(index,"task",event.target.value)}/></label><div className="form-grid"><label>담당자<input value={item.assignee||""} disabled={!item.selected} onChange={event=>update(index,"assignee",event.target.value)}/></label><label>기한<input type="date" value={item.due_date||""} disabled={!item.selected} onChange={event=>update(index,"due_date",event.target.value)}/></label><label>우선순위<select value={item.priority} disabled={!item.selected} onChange={event=>update(index,"priority",event.target.value)}><option value="low">낮음</option><option value="medium">보통</option><option value="high">높음</option></select></label></div><blockquote><span>원문 근거</span>{item.evidence}</blockquote></article>):<div className="empty">확인된 후속 업무가 없습니다.</div>}
       </div>
-      <footer><span className="selection-count">{selected.length}개 선택</span><button className="button ghost" onClick={onClose}>취소</button><button className="button primary" disabled={!selected.length||saving} onClick={()=>onConfirm(selected)}><CheckCircle2/>{saving?"저장 중...":"Action Item 저장"}</button></footer>
+      <footer>{!approved&&<small className="approval-note">회의록이 팀장 승인을 받은 뒤에 확정할 수 있습니다. 협업 공간 › 담당 회의에서 검토를 요청하세요.</small>}<span className="selection-count">{selected.length}개 선택</span><button className="button ghost" onClick={onClose}>취소</button><button className="button primary" disabled={!approved||!selected.length||saving} onClick={()=>onConfirm(selected)}><CheckCircle2/>{saving?"저장 중...":approved?"Action Item 저장":"승인 후 확정 가능"}</button></footer>
     </section>
   </div>;
 }

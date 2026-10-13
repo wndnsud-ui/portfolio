@@ -46,7 +46,7 @@ async def create_action_item(payload: ActionItemCreate, db: Session = Depends(ge
         meeting = get_meeting_or_404(db, payload.meeting_id, current_user)
         if meeting.project_id != payload.project_id:
             raise AppError("INVALID_MEETING", "Meeting does not belong to the selected project.", 400)
-        if payload.assignee_id and meeting.report_status not in {"APPROVED", "PUBLISHED"}:
+        if meeting.project.workspace_id is not None and payload.assignee_id and meeting.report_status not in {"APPROVED", "PUBLISHED"}:
             raise AppError("APPROVAL_REQUIRED", "Approve the meeting before assigning its tasks.", 409)
     validate_project_user(db, payload.project_id, payload.assignee_id)
     if payload.assignee_id and payload.status not in {ActionStatus.todo}:
@@ -122,7 +122,7 @@ async def update_action_item(action_item_id: int, payload: ActionItemUpdate, db:
             raise AppError("ASSIGNEE_REQUIRED", "Reassign task to a project member.", 400)
         validate_project_user(db, item.project_id, data["assignee_id"])
         source_id = data.get("meeting_id", item.meeting_id)
-        if data["assignee_id"] and source_id and db.get(Meeting, source_id).report_status not in {"APPROVED", "PUBLISHED"}:
+        if db.get(Project, item.project_id).workspace_id is not None and data["assignee_id"] and source_id and db.get(Meeting, source_id).report_status not in {"APPROVED", "PUBLISHED"}:
             raise AppError("APPROVAL_REQUIRED", "Approve the meeting before assigning its tasks.", 409)
         if data["assignee_id"] and data["assignee_id"] != item.assignee_id:
             item.workflow_status = "ASSIGNED"

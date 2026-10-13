@@ -225,8 +225,10 @@ async def confirm_action_items(
     current_user: User = Depends(get_current_user),
 ) -> list[ActionItem]:
     meeting = get_meeting_or_404(db, meeting_id, current_user)
-    require_project_manager(db, db.get(Project, meeting.project_id), current_user.id)
-    if meeting.report_status not in {"APPROVED", "PUBLISHED"}:
+    project = db.get(Project, meeting.project_id)
+    require_project_manager(db, project, current_user.id)
+    # Personal projects have no reviewer, so the approval step does not apply.
+    if project.workspace_id is not None and meeting.report_status not in {"APPROVED", "PUBLISHED"}:
         raise AppError("APPROVAL_REQUIRED", "Approve the meeting before confirming tasks.", 409)
     saved: list[ActionItem] = []
     for candidate in payload.action_items:
@@ -269,8 +271,10 @@ async def confirm_decisions(
     meeting_id: int, payload: DecisionConfirmRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ) -> list[Decision]:
     meeting = get_meeting_or_404(db, meeting_id, current_user)
-    require_project_manager(db, db.get(Project, meeting.project_id), current_user.id)
-    if meeting.report_status not in {"APPROVED", "PUBLISHED"}:
+    project = db.get(Project, meeting.project_id)
+    require_project_manager(db, project, current_user.id)
+    # Personal projects have no reviewer, so the approval step does not apply.
+    if project.workspace_id is not None and meeting.report_status not in {"APPROVED", "PUBLISHED"}:
         raise AppError("APPROVAL_REQUIRED", "Approve the meeting before confirming decisions.", 409)
     saved: list[Decision] = []
     for item in payload.decisions:

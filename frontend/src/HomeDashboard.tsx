@@ -1,9 +1,10 @@
 import GettingStartedGuide from "./GettingStartedGuide";
+
 import TaskStatusOverview from "./TaskStatusOverview";
 import { useState } from "react";
 import { ArrowRight, CalendarDays, CheckSquare2, FileText, FolderKanban, Mic, Search, Upload, AlertCircle } from "lucide-react";
 import type { ActionItem, Decision, Meeting, Project, View } from "./types";
-interface Props { projects:Project[]; meetings:Meeting[]; actions:ActionItem[]; decisions:Decision[]; userName:string; onNavigate:(view:View)=>void; onNewMeeting:()=>void; onOpenProject:(id:number)=>void; onOpenMeeting:(id:number)=>void; onOpenAction:(id:number)=>void; onOpenDecision:(id:number)=>void; }
+interface Props { userId:number; projects:Project[]; meetings:Meeting[]; actions:ActionItem[]; decisions:Decision[]; userName:string; onNavigate:(view:View)=>void; onNewMeeting:()=>void; onOpenProject:(id:number)=>void; onOpenMeeting:(id:number)=>void; onOpenAction:(id:number)=>void; onOpenDecision:(id:number)=>void; }
 const labels:Record<string,string>={todo:"할 일",in_progress:"진행 중",done:"완료",cancelled:"취소",draft:"검토 대기",confirmed:"확정"};
 const dayKey=(date:Date)=>new Intl.DateTimeFormat("sv-SE",{timeZone:"Asia/Seoul"}).format(date);
 export default function HomeDashboard(p:Props) {
@@ -12,7 +13,7 @@ export default function HomeDashboard(p:Props) {
  const localKey=(d:Date)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
  const open=p.actions.filter(a=>!["done","cancelled"].includes(a.status));
  const week=p.meetings.filter(m=>m.meeting_date.slice(0,10)>=localKey(start)&&m.meeting_date.slice(0,10)<localKey(end));
- const mine=p.actions.filter(a=>a.assignee===p.userName);const personal=mine.length>0;
+ const mine=p.actions.filter(a=>a.assignee_id===p.userId||(!a.assignee_id&&p.projects.some(project=>project.id===a.project_id&&project.workspace_id==null)));const personal=mine.length>0;
  const source=personal?mine:p.actions;
  const match=(text:string)=>text.toLowerCase().includes(query.trim().toLowerCase());
  const meetings=[...p.meetings].filter(m=>match(m.title)).sort((a,b)=>b.meeting_date.localeCompare(a.meeting_date)).slice(0,3);

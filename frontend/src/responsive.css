@@ -1,0 +1,70 @@
+/* Phone layouts override shared desktop styles without hiding content. */
+.main-content, .page, .panel, .entity-card { min-width: 0; }
+img, video, iframe { max-width: 100%; }
+.home-metric > .metric-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  overflow: hidden;
+}
+.home-metric > .metric-icon svg { display: block; width: 22px; height: 22px; }
+.home-metric > div { min-width: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 900px) {
+  .sidebar { position: sticky; top: 0; padding-top: calc(12px + env(safe-area-inset-top)); }
+  .brand-row { margin-bottom: 0; }
+  .mobile-menu { min-width: 44px; min-height: 44px; }
+  .sidebar.open nav { max-height: 60dvh; overflow-y: auto; }
+  .topbar { position: static; height: auto; min-height: 0; flex-wrap: wrap; }
+  .topbar-right { flex: 1 1 100%; min-width: 0; width: 100%; }
+  .page { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
+  .mobile-bottom { padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); }
+}
+
+@media (max-width: 600px) {
+  .sidebar { padding-left: 14px; padding-right: 14px; }
+  .topbar { padding: 14px; gap: 12px; }
+  .topbar-right { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px; gap: 8px; }
+  .topbar-right > select { grid-column: 1 / -1; grid-row: 1; width: 100%; max-width: none; min-width: 0; min-height: 44px; }
+  .topbar-right > .button { min-width: 0; padding: 8px; font-size: 12px; }
+  .top-actions { grid-column: 1 / -1; grid-row: 3; width: 100%; }
+  .top-actions .button { width: 100%; font-size: 13px; }
+  .user-session { justify-content: center; }
+  .user-session .icon-control { width: 44px; min-height: 44px; }
+  .button, .icon-control, .google-button, .filters select { min-height: 44px; }
+  input:not([type=checkbox]):not([type=radio]), select, textarea,
+  .auth-panel input, .modal input, .modal select, .modal textarea,
+  .settings-form input { font-size: 16px; max-width: 100%; min-width: 0; }
+  .page { padding: 18px 14px calc(100px + env(safe-area-inset-bottom)); }
+  .card-grid, .decision-grid, .dashboard-grid, .home-grid, .home-projects { grid-template-columns: minmax(0, 1fr); }
+  .panel, .entity-card { padding: 14px; }
+  .table-panel { padding: 0; max-width: 100%; overflow-x: auto; }
+  .workflow-heading { align-items: stretch; gap: 10px; }
+  .workflow-heading > div { min-width: 0; }
+  .workflow-heading form, .workflow-tabs, .meeting-tools, .row-actions { flex-wrap: wrap; }
+  .workflow-tabs .button { flex: 1 1 130px; font-size: 12px; }
+  .entity-card footer, .section-heading, .panel-title, .home-panel-head, .editor-heading { flex-wrap: wrap; gap: 10px; }
+  .entity-card h3, .workflow-entry, .workflow-task-card, .schedule-item > div { overflow-wrap: anywhere; min-width: 0; }
+  .modal-backdrop { padding: 0; }
+  .modal, .workflow-modal, .review-modal { width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .modal > header { padding-top: max(16px, env(safe-area-inset-top)); }
+  .modal > footer { flex-wrap: wrap; padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+  .modal > footer .button { flex: 1; }
+  .form-grid { grid-template-columns: minmax(0, 1fr); }
+  .auth-shell { min-height: 100dvh; padding: 14px; }
+  .auth-layout { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+  .auth-story { padding: 24px; }
+  .auth-panel { padding: 24px 20px; min-width: 0; }
+  .first-use-tutorial { right: 14px; left: 14px; width: auto; max-width: none; bottom: calc(90px + env(safe-area-inset-bottom)); max-height: 65dvh; }
+  .toast { bottom: calc(90px + env(safe-area-inset-bottom)); overflow-wrap: anywhere; }
+}
+
+@media (max-width: 360px) {
+  .metric-grid.home-metrics { grid-template-columns: minmax(0, 1fr); }
+  .status-chart { flex-wrap: wrap; }
+  .sidebar.open nav { grid-template-columns: minmax(0, 1fr); }
+}
+.my-progress-summary{display:flex;align-items:center;gap:18px;margin:16px 0}.my-progress-summary>strong{font-size:32px;color:#6940d4}.my-progress-summary>div{flex:1;min-width:0;display:grid;gap:8px}.my-progress-summary span{font-size:12px;color:var(--muted)}.my-progress progress{width:100%;height:10px;accent-color:#7950df}.my-progress-task{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;width:100%;padding:16px 0;background:transparent;color:var(--ink);border:0;border-top:1px solid var(--line);text-align:left}.my-progress-task b{display:block;overflow-wrap:anywhere}.my-progress-task small{display:block;margin-top:6px;color:var(--muted)}.my-progress-task>span{font-size:12px;color:#6940d4}.my-progress-task>progress,.my-progress-task>p{grid-column:1/-1}.my-progress-task>p{font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere}.my-progress-task:hover{background:#faf8ff}
+.calendar-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}.calendar-week,.calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.calendar-week{text-align:center;color:var(--muted);font-size:12px;margin-bottom:8px}.calendar-day{min-width:0;min-height:85px;padding:10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);text-align:left}.calendar-day.outside{color:#9696a6;background:#f8f8fb}.calendar-day.selected{border-color:#7950df;background:#f1ebff}.calendar-day[aria-current=date] b{color:#6940d4;text-decoration:underline;text-underline-offset:4px}.calendar-count{display:block;font-size:11px;margin-top:7px}.calendar-dots{display:flex;gap:4px;margin-top:6px}.calendar-dots i{width:6px;height:6px;border-radius:50%;background:#7950df}.calendar-dots i.meeting{background:#03a88f}.calendar-legend{display:flex;gap:18px;font-size:12px;margin:16px 0;color:#7950df}.calendar-legend span:last-child{color:#03a88f}.calendar-note{font-size:12px;color:var(--muted);margin-top:16px;line-height:1.6}@media(max-width:600px){.calendar-day{min-height:66px;padding:6px 3px}.calendar-count{font-size:10px}.calendar-heading h2{font-size:17px}}

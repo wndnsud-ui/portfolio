@@ -26,3 +26,8 @@ button.photo-thumb{cursor:zoom-in}
 .ocr-review small{color:var(--muted)}
 .ocr-review textarea{min-height:220px;width:100%;padding:10px;border:1px solid #ccd3ce;border-radius:6px;background:#fff;font:inherit;resize:vertical}
 @media(max-width:700px){.capture-buttons .capture-button{flex:1 1 140px;min-height:46px}.photo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.webcam-dialog{position:fixed;inset:0;z-index:90;display:grid;place-items:center;padding:16px;background:rgba(10,15,12,.88)}
+.webcam-panel{display:grid;gap:10px;width:min(760px,100%);padding:14px;border-radius:8px;background:#fff}
+.webcam-panel video{width:100%;max-height:calc(100vh - 160px);border-radius:6px;background:#111;object-fit:contain}
+.webcam-panel [role=alert]{color:#b42318;font-size:13px}
+.webcam-panel .capture-buttons{margin:0;justify-content:flex-end}

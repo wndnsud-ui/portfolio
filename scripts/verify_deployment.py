@@ -26,7 +26,7 @@ if "--browser" in sys.argv:
         page = browser.new_page(viewport={"width": 390, "height": 844})
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.goto(url, wait_until="networkidle")
-        page.get_by_placeholder("이메일", exact=True).wait_for()
+        page.get_by_role("heading", name="다시 만나 반가워요").wait_for()
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
         assert not errors, errors
         artifact = Path(".tools/browser-smoke")

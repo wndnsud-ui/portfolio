@@ -1,4 +1,4 @@
-export type View = "dashboard" | "projects" | "meetings" | "actions" | "decisions" | "settings" | "workflow" | "team";
+export type View = "dashboard" | "projects" | "meetings" | "actions" | "decisions" | "settings" | "workflow" | "team" | "schedule";
 export type EntityType = "projects" | "meetings" | "actions" | "decisions";
 
 export interface Workspace { id:number; name:string; role:"OWNER"|"MANAGER"|"MEMBER"; }
