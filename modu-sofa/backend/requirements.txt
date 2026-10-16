@@ -1,0 +1,15 @@
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30
+starlette>=0.40
+SQLAlchemy>=2.0.30,<3.0
+alembic>=1.13
+psycopg[binary]>=3.2
+pydantic>=2.7
+pydantic-settings>=2.3
+PyJWT[crypto]>=2.8
+httpx>=0.27
+openai>=1.60
+python-multipart>=0.0.9
+# FFmpeg 바이너리가 PATH에 없을 때(로컬 개발) 사용하는 번들. Docker 이미지에서는 apt ffmpeg를 사용한다.
+imageio-ffmpeg>=0.5
+pytest>=8.0

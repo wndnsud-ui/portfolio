@@ -1,0 +1,19 @@
+# 비밀값 — 절대 커밋하지 않는다
+.env
+.env.*
+!.env.example
+
+# 로컬 데이터 (업로드한 음성, 개발 DB)
+modu-sofa/backend/data/
+
+# 의존성 / 빌드 / 캐시
+**/.venv/
+**/node_modules/
+**/dist/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.tsbuildinfo
+.vscode/
+.idea/
