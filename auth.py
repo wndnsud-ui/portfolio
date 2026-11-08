@@ -2,8 +2,10 @@
 import hmac
 import time
 from functools import wraps
+from urllib.parse import urlsplit
 
-from flask import current_app, redirect, request, session, url_for
+from flask import current_app, flash, redirect, request, session, url_for
+from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash
 
 MAX_FAILURES = 5
@@ -58,13 +60,31 @@ def is_admin():
     return bool(session.get("admin"))
 
 
+def admin_return_url(target):
+    """Return only to an existing admin page that accepts GET, never a save action."""
+    fallback = url_for("admin.dashboard")
+    target = target or ""
+    try:
+        parts = urlsplit(target or "")
+        if parts.scheme or parts.netloc or "\\" in target or not parts.path.startswith("/admin/"):
+            return fallback
+        endpoint, _ = current_app.url_map.bind("").match(parts.path, method="GET")
+        if not endpoint.startswith("admin.") or endpoint in ("admin.login", "admin.logout"):
+            return fallback
+    except (ValueError, HTTPException):
+        return fallback
+    return target
+
+
 def admin_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
         if not is_admin():
             if request.is_json or request.path.startswith("/admin/api/"):
                 return {"ok": False, "error": "login required"}, 401
-            return redirect(url_for("admin.login", next=request.full_path))
+            if request.method not in ("GET", "HEAD"):
+                flash("로그인이 풀려 저장하지 못했어요. 다시 로그인한 뒤 내용을 확인하고 저장해 주세요.", "error")
+            return redirect(url_for("admin.login", next=admin_return_url(request.full_path)), code=303)
         return view(*args, **kwargs)
 
     return wrapped
