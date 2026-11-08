@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, url_for
 from sqlalchemy import func
 
-from auth import admin_required, check_credentials, clear_failures, client_ip, locked_seconds, login_admin, record_failure
+from auth import admin_required, admin_return_url, check_credentials, clear_failures, client_ip, locked_seconds, login_admin, record_failure
 from content import (BOOK_STATUS, CATEGORIES, KINDS, LIFE_CATEGORIES, NOTES_CATEGORIES, POST_KINDS, SINGLE_KINDS, TINTS,
                      clean_text, clean_url, normalize_blocks, normalize_design, slugify, social_url, youtube_id)
 from models import Archive, Book, Experience, Profile, Project, RecordComment, Showcase, Skill, SyncLog, Video, db
@@ -28,7 +28,7 @@ def login():
             clear_failures(ip)
             login_admin()
             target = request.args.get("next", "")
-            return redirect(target if target.startswith("/admin") else url_for("admin.dashboard"))
+            return redirect(admin_return_url(target), code=303)
         else:
             record_failure(ip)
             flash("아이디나 비밀번호가 맞지 않아요. 5번 틀리면 잠시 잠겨요.", "error")
