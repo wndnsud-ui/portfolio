@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% from '_components.html' import icon, chip, body as render_body, toc_card, book_cover, stars %}
+{% set type_key = TYPE_OF_KIND.get(post.content_type, 'study') %}
+{% block title %}{{ post.title }} — HY ARCHIVE{% endblock %}
+{% block description %}{{ post.summary or (post.blocks|excerpt(160)) }}{% endblock %}
+{% block og_type %}article{% endblock %}
+{% block og_image %}{% if post.image %}{{ post.image if post.image.startswith('http') else request.host_url.rstrip('/') ~ post.image }}{% else %}{{ url_for('static', filename='images/og-default.png', _external=True) }}{% endif %}{% endblock %}
+{% block content %}
+<div class="wrap article-grid">
+  <article class="post {{ design|design_classes }}">
+    <p class="crumbs"><a href="{{ url_for('notes') }}">기록</a> / <a href="{{ url_for('notes', type=type_key) }}">{{ NOTE_TYPES[type_key][0] }}</a></p>
+    {% if design.cover == 'large' and post.image %}<figure class="post-hero"><img src="{{ post.image }}" alt=""></figure>{% endif %}
+    <header class="post-header">
+      <p class="chip-wrap">{{ chip(post_label(post), post_tint(post)) }}{% for t in post.tag_list %}<a class="chip chip-plain" href="{{ url_for('notes', q=t) }}"># {{ t }}</a>{% endfor %}</p>
+      <h1 class="post-title">{{ post.title }}</h1>
+      {% if post.summary %}<p class="post-summary">{{ post.summary }}</p>{% endif %}
+      <p class="post-meta">
+        <time datetime="{{ post.display_date.isoformat() if post.display_date }}">{{ post.display_date|date }}</time>
+        <span>{{ minutes }}분 읽기</span><span>조회 {{ post.view_count }}</span>
+        {% if post.status != 'published' %}{{ chip('임시저장 · 나만 보여요', 'pink') }}{% elif post.is_scheduled %}{{ chip('공개 예약 ' ~ post.published_at|date('%m.%d %H:%M'), 'butter') }}{% endif %}
+        {% if is_admin %}<a class="edit-link" href="{{ url_for('admin.write', kind='reading' if post.content_type == 'reading' else 'notes', id=post.id) }}">{{ icon('pen', 14) }}수정</a>{% endif %}
+      </p>
+    </header>
+
+    {% if post.content_type == 'reading' and post.book %}
+    {% set book = post.book %}
+    <a class="book-info tint-butter" href="{{ url_for('book_detail', book_id=book.id) }}">
+      {{ book_cover(book, 'small') }}
+      <dl class="kv">
+        {% if book.author %}<div><dt>저자</dt><dd>{{ book.author }}</dd></div>{% endif %}
+        {% if book.publisher %}<div><dt>출판사</dt><dd>{{ book.publisher }}</dd></div>{% endif %}
+        {% if book.genre %}<div><dt>장르</dt><dd>{{ book.genre }}</dd></div>{% endif %}
+        {% if book.period %}<div><dt>읽은 기간</dt><dd>{{ book.period }}</dd></div>{% endif %}
+        {% if book.rating %}<div><dt>별점</dt><dd>{{ stars(book.rating) }}</dd></div>{% endif %}
+      </dl>
+    </a>
+    {% endif %}
+
+    {{ render_body(body) }}
+
+    <section class="reactions" id="reactions" aria-label="반응">
+      <form method="post" action="{{ url_for('like_post', post_id=post.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sub{{ ' is-on' if liked }}" type="submit" aria-pressed="{{ 'true' if liked else 'false' }}">{{ icon('heart', 15) }}좋았어요 <b>{{ post.like_count }}</b></button>
+      </form>
+      <button class="btn btn-sub" type="button" data-copy-link>{{ icon('link', 15) }}링크 복사</button>
+      {% if post.source_url %}<a class="text-btn" href="{{ post.source_url }}" target="_blank" rel="noopener">원문 보기 ↗</a>{% endif %}
+    </section>
+
+    <section class="comments" id="comments" aria-labelledby="comments-title">
+      {% set visible = post.visible_comments %}
+      <h2 id="comments-title">댓글 <span>{{ visible|length }}</span></h2>
+      <form class="comment-form" method="post" action="{{ url_for('add_comment', post_id=post.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="hp" aria-hidden="true"><label>웹사이트 <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
+        <label for="c-author">이름</label>
+        <input id="c-author" class="input input-short" type="text" name="author" maxlength="40" placeholder="익명">
+        <label for="c-content">내용</label>
+        <textarea id="c-content" class="input" name="content" rows="4" maxlength="{{ comment_limit }}" required placeholder="이 글에 대한 생각을 남겨 주세요 ({{ comment_limit }}자 이내)" data-counter></textarea>
+        <div class="comment-actions"><small data-counter-out>0 / {{ comment_limit }}</small><button class="btn btn-primary" type="submit">남기기</button></div>
+      </form>
+      <ul class="comment-list">
+        {% for c in visible %}
+        <li><p class="comment-meta"><strong>{{ c.author }}</strong><time class="mono">{{ c.created_at|date('%Y.%m.%d %H:%M') }}</time></p><p>{{ c.content|nl2br }}</p></li>
+        {% else %}<li class="comment-empty">첫 댓글을 기다리고 있어요.</li>{% endfor %}
+      </ul>
+    </section>
+  </article>
+
+  <aside class="article-aside">
+    {{ toc_card(toc) }}
+    {% if related %}
+    <nav class="side-card related" aria-label="함께 읽으면 좋은 기록">
+      <p class="side-title">함께 읽으면 좋은 기록</p>
+      <ul>{% for r in related %}<li><a href="{{ post_url(r) }}">{{ chip(post_label(r), post_tint(r)) }}<strong>{{ r.title }}</strong></a></li>{% endfor %}</ul>
+    </nav>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

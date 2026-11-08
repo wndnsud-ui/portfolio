@@ -1,2 +1,81 @@
-{% extends 'base.html' %}{% block title %}{{ project.title }} — HY ARCHIVE{% endblock %}{% block content %}<main class="page detail"><p class="eyebrow">PROJECT 0{{ project.id }} / CASE STUDY</p><h1 class="page-title">{{ project.title }}<br><em>{{ project.subtitle }}</em></h1><p class="lead">{{ project.description }}</p><div class="detail-grid">{% for label, value in [('PROBLEM', project.problem),('MY ROLE', project.role),('PROCESS', project.process),('ACTION', project.action),('TROUBLE', project.trouble),('SOLUTION', project.solution),('RESULT', project.result),('INSIGHT', project.insight)] %}<section><p class="eyebrow">{{ label }}</p><p>{{ value }}</p></section>{% endfor %}</div><div class="tag-list">{% for tag in project.tech_stack.split(' / ') %}<span>{{ tag }}</span>{% endfor %}</div><a class="button" href="{{ url_for('projects') }}">← BACK TO PROJECTS</a></main>{% endblock %}
+{% extends 'base.html' %}
+{% from '_components.html' import icon, chip, body as render_body %}
+{% block title %}{{ project.title }} — 프로젝트 | HY ARCHIVE{% endblock %}
+{% block description %}{{ project.subtitle or '' }} {{ project.description or '' }}{% endblock %}
+{% block og_type %}article{% endblock %}
+{% block og_image %}{% if project.image %}{{ project.image if project.image.startswith('http') else request.host_url.rstrip('/') ~ project.image }}{% else %}{{ url_for('static', filename='images/og-default.png', _external=True) }}{% endif %}{% endblock %}
+{% block content %}
+{% set t = project_tint(project) %}
+{% set steps = [] %}
+{% if project.problem %}{% set _ = steps.append(('problem', '문제', 'butter')) %}{% endif %}
+{% if project.process or project.action %}{% set _ = steps.append(('structure', '구조', 'mint')) %}{% endif %}
+{% if project.trouble or project.solution %}{% set _ = steps.append(('trouble', '막힌 지점과 해결', 'pink')) %}{% endif %}
+{% if project.result %}{% set _ = steps.append(('result', '결과', 'sky')) %}{% endif %}
+<article class="wrap case {{ design|design_classes }}">
+  <p class="crumbs"><a href="{{ url_for('projects') }}">프로젝트</a> / <span>{{ project.title }}</span></p>
+  <header class="case-head">
+    {% if project.category %}{{ chip(project.category, t) }}{% endif %}
+    <h1>{{ project.title }}</h1>
+    {% if project.subtitle %}<p class="lead">{{ project.subtitle }}</p>{% endif %}
+    {% if project.status != 'published' %}<p>{{ chip('임시저장 · 나만 보여요', 'pink') }}</p>{% endif %}
+    {% if is_admin %}<a class="edit-link" href="{{ url_for('admin.write', kind='project', id=project.id) }}">{{ icon('pen', 14) }}수정</a>{% endif %}
+  </header>
 
+  <figure class="case-cover tint-{{ t }}">{% if project.image %}<img src="{{ project.image }}" alt="{{ project.title }} 화면">{% else %}<span class="media-name">{{ project.title }}</span>{% endif %}</figure>
+
+  <div class="info-cards">
+    {% if project.role %}<div class="info-card"><span>내 역할</span><strong>{{ project.role }}</strong></div>{% endif %}
+    {% if project.tech_list %}<div class="info-card"><span>기술</span><strong class="mono">{{ project.tech_list|join(' · ') }}</strong></div>{% endif %}
+    <div class="info-card"><span>기간</span><strong>{{ project.period or '정리 중이에요' }}</strong></div>
+    {% if project.demo_url %}<a class="info-card is-dark" href="{{ project.demo_url }}" target="_blank" rel="noopener"><span>직접 써 보기</span><strong>서비스 열기 ↗</strong></a>
+    {% elif project.github_url %}<a class="info-card is-dark" href="{{ project.github_url }}" target="_blank" rel="noopener"><span>코드 보기</span><strong>GitHub ↗</strong></a>{% endif %}
+  </div>
+
+  <div class="case-grid">
+    <div class="case-main">
+      {% if project.description %}<p class="case-intro">{{ project.description|nl2br }}</p>{% endif %}
+      {% for key, label, st in steps %}
+      <section class="case-step" id="{{ key }}" aria-labelledby="{{ key }}-title">
+        <span class="step-no tint-{{ st }} mono">{{ '%02d'|format(loop.index) }}</span>
+        <div>
+          <h2 id="{{ key }}-title">{{ label }}</h2>
+          {% if key == 'problem' %}<p>{{ project.problem|nl2br }}</p>
+          {% elif key == 'structure' %}
+            {% if project.action %}<p>{{ project.action|nl2br }}</p>{% endif %}
+            {% if project.process %}
+            {% set flow = project.process.replace('->', '→').split('→') %}
+            {% if flow|length > 1 %}<ol class="flow-chips">{% for f in flow %}<li>{{ f.strip() }}</li>{% endfor %}</ol>
+            {% else %}<p>{{ project.process|nl2br }}</p>{% endif %}
+            {% endif %}
+          {% elif key == 'trouble' %}
+            <div class="pair">
+              {% if project.trouble %}<div class="pair-card tint-pink"><span>막힌 지점</span><p>{{ project.trouble|nl2br }}</p></div>{% endif %}
+              {% if project.solution %}<div class="pair-card tint-mint"><span>이렇게 풀었어요</span><p>{{ project.solution|nl2br }}</p></div>{% endif %}
+            </div>
+          {% elif key == 'result' %}<p>{{ project.result|nl2br }}</p>{% endif %}
+        </div>
+      </section>
+      {% endfor %}
+
+      {% if project.insight %}
+      <div class="learned tint-butter"><span>배운 점</span><p>{{ project.insight|nl2br }}</p></div>
+      {% endif %}
+
+      {% if body %}<div class="case-more {{ design|design_classes }}">{{ render_body(body) }}</div>{% endif %}
+
+      <nav class="next-nav" aria-label="다른 프로젝트">
+        <a class="next-card" href="{{ url_for('projects') }}"><span>← 전체 프로젝트</span><strong>프로젝트 목록으로</strong></a>
+        {% if next_item %}<a class="next-card is-next tint-{{ project_tint(next_item) }}" href="{{ project_url(next_item) }}"><span>다음 프로젝트 →</span><strong>{{ next_item.title }}</strong></a>{% endif %}
+      </nav>
+    </div>
+    {% if steps %}
+    <aside class="case-aside">
+      <nav class="side-card toc" aria-label="순서">
+        <p class="side-title">순서</p>
+        <ol>{% for key, label, st in steps %}<li><a href="#{{ key }}">{{ '%02d'|format(loop.index) }} {{ label }}</a></li>{% endfor %}</ol>
+      </nav>
+    </aside>
+    {% endif %}
+  </div>
+</article>
+{% endblock %}

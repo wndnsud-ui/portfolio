@@ -1,0 +1,192 @@
+{% extends 'admin/_layout.html' %}
+{% from '_components.html' import icon %}
+{% block title %}글쓰기 · {{ KINDS[kind].label }}{% endblock %}
+{% block body_class %}studio-page{% endblock %}
+{% block content %}
+{% set is_new = item is none %}
+{% set single = kind in SINGLE_KINDS %}
+{% set published = (not is_new) and not single and item.status == 'published' %}
+{% set kind_tint = {'project': 'sky', 'notes': 'mint', 'reading': 'butter', 'about': 'pink'} %}
+<form class="studio" id="studio" method="post" action="{{ url_for('admin.write', kind=kind, id=item.id if item and not single else None) }}"
+      data-kind="{{ kind }}" data-autosave-url="{{ url_for('admin.autosave') }}" data-upload-url="{{ url_for('admin.upload') }}"
+      data-book-search-url="{{ url_for('admin.book_search') }}" data-book-cover-url="{{ url_for('admin.book_cover') }}"
+      {% if notion_ready %}data-notion-pages-url="{{ url_for('admin.notion_pages') }}" data-notion-blocks-url="{{ url_for('admin.notion_blocks') }}"{% endif %}>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="payload" id="payload">
+  <input type="hidden" name="action" id="action-input" value="draft">
+
+  <div class="studio-top">
+    <a class="back" href="{{ url_for('admin.dashboard') }}">← 콘텐츠</a>
+    <nav class="kind-tabs" aria-label="무엇을 쓸까요">
+      {% for k, info in KINDS.items() %}
+      <a href="{{ url_for('admin.write', kind=k) }}" class="{{ 'is-active' if k == kind }}"{% if k == kind %} aria-current="page"{% endif %}><i class="dot tint-{{ kind_tint[k] }}" aria-hidden="true"></i>{{ info.label }}</a>
+      {% endfor %}
+    </nav>
+    {% if single %}<span class="state-pill tint-mint"><i></i>공개 중</span>
+    {% elif is_new %}<span class="state-pill tint-butter"><i></i>새 글</span>
+    {% elif item.is_scheduled %}<span class="state-pill tint-sky"><i></i>공개 예약</span>
+    {% elif published %}<span class="state-pill tint-mint"><i></i>공개 중</span>
+    {% else %}<span class="state-pill tint-butter"><i></i>임시저장</span>{% endif %}
+    <p class="save-state" id="save-state" aria-live="polite"></p>
+    <div class="seg-toggle" role="group" aria-label="미리보기 크기">
+      <button type="button" data-view="desktop" aria-pressed="true">데스크톱</button>
+      <button type="button" data-view="mobile" aria-pressed="false">모바일</button>
+    </div>
+    {% if single %}
+      <a class="btn btn-sub btn-icon" href="{{ url_for('about') }}" target="_blank" rel="noopener" aria-label="사이트에서 보기">↗</a>
+      <button class="btn btn-sub" type="button" data-pop-toggle aria-expanded="false" aria-controls="publish-pop">설정 ▾</button>
+      <button class="btn btn-primary" type="submit" data-action="publish">저장하기</button>
+    {% else %}
+      {% if not is_new %}<a class="btn btn-sub btn-icon" href="{{ project_url(item) if kind == 'project' else post_url(item) }}" target="_blank" rel="noopener" aria-label="사이트에서 보기">↗</a>{% endif %}
+      <button class="btn btn-sub" type="submit" data-action="draft">{{ '비공개로 돌리기' if published else '임시저장' }}</button>
+      <button class="btn btn-primary" type="button" data-pop-toggle aria-expanded="false" aria-controls="publish-pop">{{ '수정 발행' if published else '발행' }} ▾</button>
+    {% endif %}
+  </div>
+
+  <div class="editor-bar" id="editor-bar" role="toolbar" aria-label="넣기와 글자 꾸미기"></div>
+
+  <div class="studio-cols">
+    <section class="studio-center" aria-label="본문 편집 — 공개될 모습 그대로">
+      <div class="canvas-frame" id="canvas-frame"><div class="canvas" id="canvas"></div></div>
+    </section>
+
+    <aside class="publish-pop" id="publish-pop" hidden aria-label="{{ '설정' if single else '발행 설정' }}">
+      <div class="pop-head"><strong>{{ '설정' if single else '발행 설정' }}</strong><button class="icon-btn" type="button" data-pop-close aria-label="닫기">✕</button></div>
+
+      {% if not single %}
+      <div class="opt-block opt-publish">
+        <p class="opt-title">분류 · 태그</p>
+        {% if kind == 'notes' %}
+        <label for="f-category">분류</label>
+        <select id="f-category" data-bind="category">
+          <optgroup label="공부·업무">{% for c in note_categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</optgroup>
+          <optgroup label="일상">{% for c in life_categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</optgroup>
+        </select>
+        {% elif kind == 'project' %}
+        <label for="f-pcat">분류 칩</label>
+        <input class="input" id="f-pcat" data-bind="project.category" placeholder="추천 · 데이터">
+        <label for="f-tech">기술 <small>· 나 / 로 구분</small></label>
+        <input class="input" id="f-tech" data-bind="project.tech_stack" placeholder="Python · Flask · SQLite">
+        {% else %}
+        <p class="hint">분류: 독서 노트</p>
+        {% endif %}
+        {% if kind != 'project' %}
+        <label for="f-tags">태그</label>
+        <input class="input" id="f-tags" data-bind="tags" placeholder="쉼표로 구분">
+        <label class="check-row" for="f-pin"><span>홈에 고정</span><input id="f-pin" type="checkbox" data-bind="is_pinned"></label>
+        {% endif %}
+        <label for="f-schedule">공개 예약</label>
+        <span class="hint">비우면 바로 공개돼요</span>
+        <input class="input" id="f-schedule" type="datetime-local" data-bind="published_at">
+      </div>
+
+      {% endif %}
+
+      {% if not single %}
+      <fieldset class="opt-block">
+        <legend class="opt-title">커버</legend>
+        <div class="cover-opts">
+          {% for value, text in DESIGN_OPTIONS.cover %}
+          <label class="cover-opt"><input type="radio" name="design-cover" value="{{ value }}" data-design="cover"><span class="cover-thumb cover-thumb-{{ value }}" aria-hidden="true"><i></i></span><span>{{ text }}</span></label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      {% endif %}
+
+      <fieldset class="opt-block">
+        <legend class="opt-title">포인트 색</legend>
+        <div class="swatches">
+          {% for value, text in DESIGN_OPTIONS.accent %}
+          <label class="swatch tint-{{ value }}"><input type="radio" name="design-accent" value="{{ value }}" data-design="accent"><i aria-hidden="true"></i><span class="sr-only">{{ text }}</span></label>
+          {% endfor %}
+        </div>
+        <p class="hint">분류 칩, 강조 상자, 커버에 쓰여요.</p>
+      </fieldset>
+
+      <fieldset class="opt-block">
+        <legend class="opt-title">본문 폭 · 글자 크기</legend>
+        <div class="seg seg-2">{% for value, text in DESIGN_OPTIONS.width %}<label><input type="radio" name="design-width" value="{{ value }}" data-design="width"><span>{{ text }}</span></label>{% endfor %}</div>
+        <div class="seg seg-3">{% for value, text in DESIGN_OPTIONS.size %}<label><input type="radio" name="design-size" value="{{ value }}" data-design="size"><span>{{ text }}</span></label>{% endfor %}</div>
+      </fieldset>
+
+      {% if not single %}
+      <details class="opt-block opt-more">
+        <summary>더 보기 · 주소와 링크</summary>
+        <label for="f-slug">주소</label>
+        <div class="slug-field"><span>/{{ 'projects' if kind == 'project' else 'notes' }}/</span><input id="f-slug" data-bind="slug" placeholder="제목에서 자동"></div>
+        <label for="f-cover">커버 이미지</label>
+        <div class="file-field" data-upload-target="cover_image">
+          <input class="input" id="f-cover" data-bind="cover_image" placeholder="https://… 또는 파일 올리기">
+          <label class="btn btn-sub btn-sm">올리기<input type="file" accept="image/*" hidden></label>
+        </div>
+        {% if kind == 'project' %}
+        <label for="f-demo">서비스 주소</label>
+        <input class="input" id="f-demo" data-bind="project.demo_url" placeholder="https://">
+        <label for="f-github">GitHub</label>
+        <input class="input" id="f-github" data-bind="project.github_url" placeholder="https://github.com/…">
+        {% endif %}
+        {% if payload.source_type == 'notion' %}
+        <p class="notice tint-butter">노션에서 가져온 글이에요. 본문을 고치면 다음 동기화 때 덮어써지니 디자인만 바꿔 주세요.</p>
+        {% endif %}
+      </details>
+
+      {% if not is_new %}
+      <details class="opt-block opt-more danger-zone">
+        <summary>삭제</summary>
+        <p class="hint">지우면 되돌릴 수 없어요. 잠시 내리려면 「{{ '비공개로 돌리기' if published else '임시저장' }}」을 쓰세요.</p>
+        <button class="btn btn-sub btn-sm danger" type="submit" form="delete-form">이 {{ KINDS[kind].label }} 삭제</button>
+      </details>
+      {% endif %}
+
+      {% else %}
+      <div class="opt-block">
+        <p class="opt-title">연락처 · 파일</p>
+        <label class="check-row" for="a-seek"><span>「새로운 일을 찾고 있어요」 배지</span><input id="a-seek" type="checkbox" data-bind="about.seeking"></label>
+        <label for="a-email">이메일</label><input class="input" id="a-email" type="email" data-bind="about.email">
+        <label for="a-github">GitHub</label><input class="input" id="a-github" data-bind="about.github" placeholder="https://github.com/…">
+        <label for="a-notion">Notion</label><input class="input" id="a-notion" data-bind="about.notion" placeholder="https://">
+        <label for="a-photo">프로필 사진</label>
+        <div class="file-field" data-upload-target="about.photo">
+          <input class="input" id="a-photo" data-bind="about.photo" placeholder="https://… 또는 파일 올리기">
+          <label class="btn btn-sub btn-sm">올리기<input type="file" accept="image/*" hidden></label>
+        </div>
+        <label for="a-resume">이력서 PDF</label>
+        <div class="file-field" data-upload-target="about.resume_url" data-file-type="file">
+          <input class="input" id="a-resume" data-bind="about.resume_url" placeholder="https://… 또는 PDF 올리기">
+          <label class="btn btn-sub btn-sm">올리기<input type="file" accept="application/pdf" hidden></label>
+        </div>
+      </div>
+      <div class="opt-block">
+        <p class="opt-title">홈 문구</p>
+        <label for="a-headline">대표 문장 <small>==단어== 는 형광펜</small></label>
+        <textarea class="input" id="a-headline" rows="2" data-bind="about.headline"></textarea>
+        <label for="a-lead">소개 문장</label>
+        <textarea class="input" id="a-lead" rows="3" data-bind="about.home_lead"></textarea>
+        <p class="opt-title sub">요약 카드 4장</p>
+        {% for i in range(4) %}
+        <div class="stat-field tint-{{ ['butter', 'mint', 'sky', 'pink'][i] }}">
+          <input class="input" aria-label="카드 {{ i + 1 }} 라벨" data-bind="about.stats.{{ i }}.label" placeholder="라벨">
+          <input class="input" aria-label="카드 {{ i + 1 }} 숫자" data-bind="about.stats.{{ i }}.value" placeholder="큰 글자">
+          <input class="input" aria-label="카드 {{ i + 1 }} 한 줄" data-bind="about.stats.{{ i }}.note" placeholder="한 줄">
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <div class="pop-foot">
+        {% if single %}<button class="btn btn-primary" type="submit" data-action="publish">저장하기</button>
+        {% else %}<button class="btn btn-primary" type="submit" data-action="publish">{{ '고친 내용 공개' if published else '✓ 발행' }}</button>{% endif %}
+      </div>
+    </aside>
+  </div>
+</form>
+{% if not is_new and not single %}
+<form id="delete-form" method="post" action="{{ url_for('admin.delete', kind=kind, item_id=item.id) }}" data-confirm>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+{% endif %}
+
+<script type="application/json" id="studio-data">{{ payload|tojson }}</script>
+<script type="application/json" id="studio-books">{{ books|tojson }}</script>
+<script type="application/json" id="studio-meta">{{ {'blockTypes': BLOCK_TYPES.items()|list, 'kindLabel': KINDS[kind].label, 'published': published, 'lifeCategories': life_categories, 'bookStatus': BOOK_STATUS.items()|list}|tojson }}</script>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/studio.js') }}" defer></script>{% endblock %}

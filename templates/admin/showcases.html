@@ -1,0 +1,102 @@
+{% extends 'admin/_layout.html' %}
+{% from '_components.html' import icon, chip %}
+{% block title %}운영 중인 곳{% endblock %}
+{% block content %}
+<main class="admin-main">
+  <header class="admin-head"><div><h1>운영 중인 곳 · 영상</h1><p>휴식도감과 모두의 소파의 소개, 상태, 영상을 여기서 고쳐요.</p></div></header>
+  <nav class="tabs" aria-label="운영 중인 곳">
+    {% for it in items %}<a class="tab{{ ' is-active' if it.slug == current }}" href="{{ url_for('admin.showcases', s=it.slug) }}"><i class="tab-dot tint-{{ it.tint }}" aria-hidden="true"></i>{{ it.title }} <b>{{ it.status_label }}</b></a>{% endfor %}
+  </nav>
+
+  {% for it in items if it.slug == current %}
+  {% set rest = it.slug == 'rest' %}
+  <div class="show-admin">
+    <form class="panel-card form-grid" method="post" action="{{ url_for('admin.save_showcase', slug=it.slug) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-head">
+        <h2 class="h-small">소개</h2>
+        <a class="text-btn" href="{{ url_for(it.slug) }}" target="_blank" rel="noopener">사이트에서 보기 ↗</a>
+      </div>
+      <fieldset class="seg">
+        <legend>상태</legend>
+        <label><input type="radio" name="status" value="live" {{ 'checked' if it.is_live }}><span>운영 중</span></label>
+        <label><input type="radio" name="status" value="soon" {{ 'checked' if not it.is_live }}><span>준비 중</span></label>
+      </fieldset>
+      <label>이름<input class="input" name="title" value="{{ it.title }}" required></label>
+      <label>분류 라벨 <small>홈 카드 위쪽 글자</small><input class="input" name="label" value="{{ it.get('label') }}" placeholder="사이트 · 유튜브"></label>
+      <label class="wide">소개 문장<textarea class="input" name="intro" rows="3" placeholder="한두 문장으로 소개해 주세요">{{ it.intro or '' }}</textarea></label>
+      <label class="wide">홈 카드 한 줄 <small>비우면 소개 문장을 써요</small><input class="input" name="summary" value="{{ it.get('summary') }}"></label>
+      {% if rest %}<label>사이트 주소<input class="input" name="site_url" value="{{ it.site_url or '' }}" placeholder="https://"></label>{% endif %}
+      <label>유튜브 채널 주소<input class="input" name="channel_url" value="{{ it.channel_url or '' }}" placeholder="https://www.youtube.com/@채널"></label>
+      {% if not rest %}<label>첫 에피소드 공개일<input class="input" name="launch_date" value="{{ it.launch_date or '' }}" placeholder="2026.12.01"></label>{% endif %}
+      <input type="hidden" name="tint" value="{{ it.tint }}">
+
+      <h3 class="form-sub wide">안내 카드 3장</h3>
+      {% for c in (it.cards or [])[:3] %}
+      <div class="mini-card wide">
+        <input class="input" name="card_title_{{ loop.index0 }}" value="{{ c.title }}" aria-label="안내 카드 {{ loop.index }} 제목">
+        <textarea class="input" name="card_text_{{ loop.index0 }}" rows="2" aria-label="안내 카드 {{ loop.index }} 내용" placeholder="내용을 적어 주세요">{{ c.text }}</textarea>
+      </div>
+      {% endfor %}
+
+      {% if rest %}
+      <h3 class="form-sub wide">도감 카드 4장</h3>
+      {% for x in (it.get('items', []) or [{}] * 4)[:4] %}
+      <label>No. {{ '%02d'|format(loop.index) }}<input class="input" name="item_{{ loop.index0 }}" value="{{ x.name or '' }}" placeholder="휴식 이름"></label>
+      {% endfor %}
+      {% else %}
+      <h3 class="form-sub wide">진행자 4명 <small>공개해도 된다고 동의받은 내용만 적어 주세요</small></h3>
+      {% for x in (it.get('hosts', []) or [{}] * 4)[:4] %}
+      <div class="mini-card">
+        <input class="input" name="host_name_{{ loop.index0 }}" value="{{ x.name or '' }}" placeholder="진행자 {{ loop.index }} 이름" aria-label="진행자 {{ loop.index }} 이름">
+        <input class="input" name="host_bio_{{ loop.index0 }}" value="{{ x.bio or '' }}" placeholder="한 줄 소개" aria-label="진행자 {{ loop.index }} 소개">
+      </div>
+      {% endfor %}
+      {% endif %}
+      <div class="form-actions wide"><button class="btn btn-primary" type="submit">저장</button></div>
+    </form>
+
+    <section class="panel-card" id="videos" aria-labelledby="videos-title">
+      <div class="form-head"><h2 class="h-small" id="videos-title">{{ '영상' if rest else '에피소드' }} <span class="count">{{ it.videos|length }}</span></h2></div>
+      <form class="video-add" method="post" action="{{ url_for('admin.add_video', slug=it.slug) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="sr-only" for="v-url">유튜브 주소</label>
+        <input class="input" id="v-url" name="url" required placeholder="유튜브 주소 붙여넣기 (watch?v= · youtu.be/ · shorts/)">
+        <input class="input" name="title" placeholder="제목" aria-label="제목">
+        <input class="input short" name="published_at" placeholder="2026.11.07" aria-label="올린 날짜">
+        <input class="input short" name="duration" placeholder="12:34" aria-label="길이">
+        <button class="btn btn-primary" type="submit">＋ 추가</button>
+      </form>
+      <p class="hint">주소만 넣어도 썸네일 카드가 생겨요. 제목·날짜·길이는 직접 적어요.</p>
+      <ol class="video-list">
+        {% for v in it.videos %}
+        <li class="{{ 'is-off' if not v.is_visible }}">
+          <img src="{{ v.thumbnail }}" alt="" loading="lazy">
+          <form class="video-edit" method="post" action="{{ url_for('admin.update_video', video_id=v.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if not rest %}<input class="input short" name="episode_no" value="{{ v.episode_no or '' }}" aria-label="에피소드 번호" placeholder="EP">{% endif %}
+            <input class="input" name="title" value="{{ v.title }}" aria-label="제목">
+            <input class="input short" name="published_at" value="{{ v.published_at or '' }}" aria-label="올린 날짜" placeholder="날짜">
+            <input class="input short" name="duration" value="{{ v.duration or '' }}" aria-label="길이" placeholder="길이">
+            <span class="video-tools">
+              <button class="btn btn-sub btn-sm" name="action" value="save">저장</button>
+              <button class="icon-btn" name="action" value="up" aria-label="위로" {{ 'disabled' if loop.first }}>↑</button>
+              <button class="icon-btn" name="action" value="down" aria-label="아래로" {{ 'disabled' if loop.last }}>↓</button>
+              <button class="btn btn-sub btn-sm" name="action" value="toggle">{{ '보이기' if not v.is_visible else '숨기기' }}</button>
+              <a class="icon-btn" href="{{ v.watch_url }}" target="_blank" rel="noopener" aria-label="유튜브에서 보기">↗</a>
+            </span>
+          </form>
+          <form method="post" action="{{ url_for('admin.update_video', video_id=v.id) }}" data-confirm>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sub btn-sm danger" name="action" value="delete">삭제</button>
+          </form>
+        </li>
+        {% else %}
+        <li class="empty-cell">아직 영상이 없어요. 위에 유튜브 주소를 붙여 넣어 보세요.</li>
+        {% endfor %}
+      </ol>
+    </section>
+  </div>
+  {% endfor %}
+</main>
+{% endblock %}

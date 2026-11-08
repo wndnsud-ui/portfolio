@@ -1,0 +1,51 @@
+{% from '_components.html' import icon %}
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}관리{% endblock %} — HY ARCHIVE</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231d1d1b'/%3E%3Ctext x='16' y='21' font-family='Arial' font-size='13' font-weight='700' fill='%23ffffff' text-anchor='middle'%3EHY%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/site.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+</head>
+<body class="admin {% block body_class %}{% endblock %}">
+  <a class="skip-link" href="#admin-main">본문으로 건너뛰기</a>
+  {% if is_admin %}
+  {% set ep = request.endpoint or '' %}
+  <div class="admin-shell">
+    <aside class="admin-side" aria-label="관리 메뉴">
+      <a class="logo" href="{{ url_for('admin.dashboard') }}"><b aria-hidden="true">HY</b><span>관리</span></a>
+      <nav class="side-nav">
+        <a href="{{ url_for('admin.dashboard') }}"{% if ep == 'admin.dashboard' %} aria-current="page"{% endif %}>{{ icon('grid', 17) }}<span>콘텐츠</span></a>
+        <a href="{{ url_for('admin.write', kind='notes') }}"{% if ep == 'admin.write' %} aria-current="page"{% endif %}>{{ icon('pen', 17) }}<span>글쓰기</span></a>
+        <a href="{{ url_for('admin.showcases') }}"{% if ep == 'admin.showcases' %} aria-current="page"{% endif %}>{{ icon('tv', 17) }}<span>운영 중인 곳</span></a>
+        <a href="{{ url_for('admin.comments') }}"{% if ep == 'admin.comments' %} aria-current="page"{% endif %}>{{ icon('chat', 17) }}<span>댓글</span></a>
+        <a href="{{ url_for('admin.importer') }}"{% if ep == 'admin.importer' %} aria-current="page"{% endif %}>{{ icon('sync', 17) }}<span>노션 가져오기</span></a>
+      </nav>
+      <div class="side-foot">
+        <span>{{ profile.name if profile else '관리자' }} 님</span>
+        <a href="{{ url_for('home') }}" target="_blank" rel="noopener"><strong>사이트 보기 ↗</strong></a>
+        <form method="post" action="{{ url_for('admin.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">로그아웃</button></form>
+      </div>
+    </aside>
+    <div class="admin-body" id="admin-main">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+  {% else %}
+  <div id="admin-main">{% block guest %}{% endblock %}</div>
+  {% endif %}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages and request.endpoint != 'admin.login' %}<div class="toasts" role="status">{% for category, message in messages %}<p class="toast {{ category }}">{{ message }}</p>{% endfor %}</div>{% endif %}
+  {% endwith %}
+  <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

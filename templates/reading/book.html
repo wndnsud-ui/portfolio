@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% from '_components.html' import icon, chip, post_card, stars, book_cover, empty_state %}
+{% block title %}{{ book.title }} — 독서 | HY ARCHIVE{% endblock %}
+{% block description %}{{ book.title }}{% if book.author %} · {{ book.author }}{% endif %}. {{ book.summary or '' }}{% endblock %}
+{% block content %}
+<div class="wrap">
+  <p class="crumbs"><a href="{{ url_for('reading') }}">독서</a> / <span>{{ book.title }}</span></p>
+  <header class="book-head">
+    {{ book_cover(book, 'large') }}
+    <div>
+      {{ chip(BOOK_STATUS.get(book.status, '읽는 중'), BOOK_STATUS_TINT.get(book.status, 'mint')) }}
+      <h1>{{ book.title }}</h1>
+      <dl class="kv">
+        {% if book.author %}<div><dt>저자</dt><dd>{{ book.author }}</dd></div>{% endif %}
+        {% if book.publisher %}<div><dt>출판사</dt><dd>{{ book.publisher }}</dd></div>{% endif %}
+        {% if book.genre %}<div><dt>장르</dt><dd>{{ book.genre }}</dd></div>{% endif %}
+        {% if book.period %}<div><dt>읽은 기간</dt><dd class="mono">{{ book.period }}</dd></div>{% endif %}
+        {% if book.rating %}<div><dt>별점</dt><dd>{{ stars(book.rating) }}</dd></div>{% endif %}
+      </dl>
+      {% if book.summary %}<p class="lead">{{ book.summary }}</p>{% endif %}
+      {% if is_admin %}<p class="admin-links">
+        {% if posts %}<a class="edit-link" href="{{ url_for('admin.write', kind='reading', id=posts[0].id) }}">{{ icon('pen', 14) }}책 정보·노트 수정</a>{% endif %}
+        <a class="edit-link" href="{{ url_for('admin.write', kind='reading') }}">{{ icon('pen', 14) }}이 책의 노트 쓰기</a></p>{% endif %}
+    </div>
+  </header>
+</div>
+<section class="wrap section-s" aria-labelledby="book-notes">
+  <h2 class="h-small" id="book-notes">독서 노트 <span class="count">{{ posts|length + legacy|length }}</span></h2>
+  {% if posts %}<div class="grid-3">{% for post in posts %}{{ post_card(post) }}{% endfor %}</div>{% endif %}
+  {% for note in legacy %}
+  <article class="card legacy-note">
+    <p class="mono-line">{% if note.chapter %}{{ note.chapter }}{% endif %}{% if note.page %} · p.{{ note.page }}{% endif %}</p>
+    {% if note.title %}<h3>{{ note.title }}</h3>{% endif %}
+    {% if note.quote %}<blockquote class="b-quote"><p>{{ note.quote|nl2br }}</p></blockquote>{% endif %}
+    {% if note.summary %}<p>{{ note.summary|nl2br }}</p>{% endif %}
+    {% if note.my_thought %}<div class="b-callout">{{ note.my_thought|nl2br }}</div>{% endif %}
+    {% if note.question %}<p><strong>Q.</strong> {{ note.question }}</p>{% endif %}
+    {% if note.answer %}<p><strong>A.</strong> {{ note.answer }}</p>{% endif %}
+    {% if note.application %}<p><strong>적용</strong> {{ note.application }}</p>{% endif %}
+  </article>
+  {% endfor %}
+  {% if not posts and not legacy %}{{ empty_state('아직 남긴 노트가 없어요. 다 읽고 나면 채워 둘게요.', url_for('reading'), '책장으로', 'book') }}{% endif %}
+</section>
+{% endblock %}

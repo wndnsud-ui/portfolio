@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% from '_components.html' import icon, chip, status_badge, video_card, empty_state %}
+{% block title %}{{ item.title }} — HY ARCHIVE{% endblock %}
+{% block description %}{{ item.intro or item.get('summary') }}{% endblock %}
+{% block content %}
+{% set rest = item.slug == 'rest' %}
+<section class="wrap">
+  <div class="show-hero tint-{{ item.tint }}">
+    <div class="show-copy">
+      <p class="show-label">
+        {% if rest %}{{ icon('leaf', 15) }}<span>직접 운영하는 곳</span>{% else %}{{ icon('sofa', 15) }}<span>{{ item.get('label') or '유튜브 팟캐스트' }}</span>{% endif %}
+        {% if item.is_live %}{{ status_badge('운영 중') }}{% else %}<span class="pill-white">준비 중</span>{% endif %}
+      </p>
+      <h1>{{ item.title }}</h1>
+      <p class="show-intro">{{ item.intro or '소개 문장을 준비하고 있어요.' }}</p>
+      <div class="show-actions">
+        {% if rest %}
+          {% if item.site_url %}<a class="btn btn-primary" href="{{ item.site_url }}" target="_blank" rel="noopener">{{ item.title.split(' ')[-1] }} 사이트 가기 ↗</a>{% endif %}
+          {% if item.channel_url %}<a class="btn btn-white" href="{{ item.channel_url }}" target="_blank" rel="noopener"><span class="yt">{{ icon('youtube', 16) }}</span>유튜브 채널</a>{% endif %}
+        {% else %}
+          {% if item.channel_url %}<a class="btn btn-youtube" href="{{ item.channel_url }}?sub_confirmation=1" target="_blank" rel="noopener">{{ icon('youtube', 16) }}유튜브에서 구독하기 ↗</a>{% endif %}
+          {% if item.launch_date %}<span class="text-btn">첫 에피소드 {{ item.launch_date }}</span>{% endif %}
+        {% endif %}
+      </div>
+    </div>
+    {% if rest %}
+    <div class="dex" aria-label="도감 카드">
+      {% for it in (item.get('items', []) or [])[:4] %}
+      <div class="dex-card dex-{{ loop.index }}"><span class="mono">No. {{ '%02d'|format(loop.index) }}</span><strong>{{ it.name or '준비 중' }}</strong></div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="sofa-art" aria-hidden="true"><span class="sofa-back"></span><span class="sofa-seat"></span><span class="sofa-arm l"></span><span class="sofa-arm r"></span><span class="sofa-cushion a"></span><span class="sofa-cushion b"></span><span class="sofa-leg l"></span><span class="sofa-leg r"></span></div>
+    {% endif %}
+  </div>
+</section>
+
+{% if not rest %}
+{% set hosts = (item.get('hosts', []) or [])[:4] %}
+{% if hosts %}
+<section class="wrap section-s" aria-labelledby="hosts-title">
+  <h2 class="h-small" id="hosts-title">소파에 앉은 사람들</h2>
+  <div class="hosts tint-{{ item.tint }}">
+    {% for hst in hosts %}
+    <div class="host"><span class="host-no tint-{{ ['butter', 'mint', 'sky', 'pink'][loop.index0 % 4] }}">{{ loop.index }}</span><strong>{{ hst.name or '진행자 ' ~ loop.index }}</strong><small>{{ hst.bio or '곧 소개할게요' }}</small></div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endif %}
+
+{% set cards = (item.cards or [])|selectattr('title')|list %}
+{% if cards %}
+<section class="wrap section-s" aria-label="안내">
+  <div class="grid-3">
+    {% for c in cards %}<div class="guide-card tint-{{ item.tint }}"><span>{{ c.title }}</span><p>{{ c.text or '곧 채워 둘게요.' }}</p></div>{% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="wrap section-s" id="videos" aria-labelledby="videos-title">
+  <header class="section-head">
+    <div><h2 class="h-mid" id="videos-title">{{ '유튜브로 보는 ' ~ item.title.split(' ')[-1] if rest else '에피소드' }}</h2>
+      <p class="muted-lead">{{ '썸네일을 누르면 미리 볼 수 있고, 유튜브로 바로 이동할 수 있어요.' if rest else '유튜브에 올라온 순서대로 쌓여요. 누르면 미리 보고, 유튜브로 이동할 수 있어요.' }}</p></div>
+    {% if item.channel_url %}<a class="btn btn-sub" href="{{ item.channel_url }}" target="_blank" rel="noopener"><span class="yt">{{ icon('youtube', 16) }}</span>채널 전체 보기 ↗</a>{% endif %}
+  </header>
+  {% if videos %}
+  <div class="grid-3">
+    {% for v in videos %}{{ video_card(v, item, ('EP.%02d '|format(v.episode_no) ~ v.title) if (not rest and v.episode_no) else none) }}{% endfor %}
+  </div>
+  {% else %}
+  {{ empty_state('첫 영상을 준비하고 있어요. 조금만 기다려 주세요.' if not item.is_live else '영상을 정리하고 있어요.', item.channel_url, '채널 보기', 'tv') }}
+  {% endif %}
+</section>
+
+{% if rest %}
+{% if series %}
+<section class="wrap section-s">
+  <div class="series-card">
+    <div><strong>모모슬 시리즈</strong><p>같은 이름으로 만든 느린책방도 함께 둘러보세요.</p></div>
+    <a class="btn btn-pink" href="{{ project_url(series) }}">{{ series.title }} 보기 →</a>
+  </div>
+</section>
+{% endif %}
+{% else %}
+<section class="wrap section-s">
+  <div class="series-card">
+    <div><strong>사주 이야기를 더 읽고 싶다면</strong><p>기록의 「사주 연구」 분류에 정리해 두었어요.</p></div>
+    <a class="btn btn-lilac" href="{{ url_for('notes', type='life', q='사주 연구') }}">사주 연구 기록 보기 →</a>
+  </div>
+</section>
+{% endif %}
+
+<dialog class="video-modal" id="video-modal" aria-labelledby="video-modal-title">
+  <div class="video-modal-box">
+    <button class="modal-close" type="button" data-close aria-label="닫기">{{ icon('close', 18) }}</button>
+    <div class="embed-frame" data-frame></div>
+    <div class="video-modal-foot">
+      <div><strong id="video-modal-title" data-title></strong><small data-date></small></div>
+      <a class="btn btn-youtube" data-watch href="#" target="_blank" rel="noopener">유튜브에서 보기 ↗</a>
+    </div>
+  </div>
+</dialog>
+{% endblock %}

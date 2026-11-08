@@ -1,0 +1,78 @@
+/* HY ARCHIVE 디자인 토큰 (v3 — 깔끔함 속의 아기자기함)
+   색·글꼴·간격·모서리는 이 파일에서만 정한다. 다른 CSS에는 색 값을 직접 쓰지 않는다. */
+:root {
+  /* 7-1. 기본 색 */
+  --bg: #fbfaf7;          /* 바탕: 따뜻한 흰색 */
+  --card: #ffffff;        /* 카드·입력창·표 */
+  --ink: #1d1d1b;         /* 제목·본문, 주 버튼, 푸터 */
+  --ink-2: #55534e;       /* 설명 문장 */
+  --muted: #6b6861;       /* 날짜·메타 (대비 4.5:1 이상) */
+  --line: #ebe8e1;        /* 카드 테두리·구분선 */
+  --line-input: #dcd8cf;  /* 입력창·보조 버튼 */
+  --marker: #fff0b3;      /* 형광펜 */
+  --ok: #3a9a62;          /* 상태 초록 점 */
+  --youtube: #c4302b;     /* 유튜브 버튼에만 */
+  --on-ink: #ffffff;      /* 검정 위 글자 */
+  --on-ink-muted: #b9b6ae;
+  --ink-line: #4a4844;    /* 검정 위 테두리 */
+  --dot-grid: #e3dfd6;    /* 점 격자 */
+  --shelf: #e9e4d8;       /* 책장 받침 */
+  --overlay: rgba(29, 29, 27, .62);
+  --shadow-hover: 0 12px 28px rgba(29, 29, 27, .07);
+  --shadow-float: 0 18px 40px rgba(29, 29, 27, .08);
+
+  /* 7-2. 의미별 파스텔 (배경 / 글자) */
+  --tint-butter-bg: #fff7d6; --tint-butter-ink: #6e5a12; --tint-butter-dot: #d9b740;
+  --tint-mint-bg: #e6f3ea;   --tint-mint-ink: #2f6b45;   --tint-mint-dot: #6fbf8b;
+  --tint-sky-bg: #e6eefb;    --tint-sky-ink: #2b5a8a;    --tint-sky-dot: #7ea7dc;
+  --tint-pink-bg: #fbe9ec;   --tint-pink-ink: #9a3a4a;   --tint-pink-dot: #df8d9c;
+  --tint-lilac-bg: #efeafb;  --tint-lilac-ink: #5a4a9a;  --tint-lilac-dot: #a495db;
+  --cover-default: #2f6b45;  /* 표지 없는 책 */
+  --cover-spine: rgba(0, 0, 0, .12);
+
+  /* 7-3. 글꼴 */
+  --font: 'Noto Sans KR', system-ui, -apple-system, 'Apple SD Gothic Neo', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --fs-hero: 50px;
+  --fs-page: 46px;
+  --fs-section: 34px;
+  --fs-section-s: 24px;
+  --fs-card: 20px;
+  --fs-body: 16px;
+  --fs-label: 13px;
+  --fs-chip: 12px;
+  --tracking-title: -0.03em;
+
+  /* 7-4. 간격과 모서리 */
+  --wrap: 1160px;
+  --wrap-resume: 960px;
+  --gutter: 32px;
+  --section: 88px;
+  --pad-card: 26px;
+  --gap-card: 16px;
+  --r-pill: 999px;
+  --r-input: 13px;
+  --r-card: 24px;
+  --r-big: 34px;
+  --tap: 44px;
+  --ease: .25s ease;
+}
+
+@media (max-width: 760px) {
+  :root {
+    --fs-hero: 31px;
+    --fs-page: 32px;
+    --fs-section: 26px;
+    --fs-section-s: 21px;
+    --gutter: 20px;
+    --section: 64px;
+    --pad-card: 22px;
+  }
+}
+
+/* 의미별 파스텔을 고르는 클래스: .tint-butter 등은 --t-bg / --t-ink / --t-dot 로 쓴다 */
+.tint-butter { --t-bg: var(--tint-butter-bg); --t-ink: var(--tint-butter-ink); --t-dot: var(--tint-butter-dot); }
+.tint-mint   { --t-bg: var(--tint-mint-bg);   --t-ink: var(--tint-mint-ink);   --t-dot: var(--tint-mint-dot); }
+.tint-sky    { --t-bg: var(--tint-sky-bg);    --t-ink: var(--tint-sky-ink);    --t-dot: var(--tint-sky-dot); }
+.tint-pink   { --t-bg: var(--tint-pink-bg);   --t-ink: var(--tint-pink-ink);   --t-dot: var(--tint-pink-dot); }
+.tint-lilac  { --t-bg: var(--tint-lilac-bg);  --t-ink: var(--tint-lilac-ink);  --t-dot: var(--tint-lilac-dot); }

@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% from '_components.html' import empty_state %}
+{% block title %}{{ code }} — HY ARCHIVE{% endblock %}
+{% block content %}
+<div class="wrap page-head error-page">
+  <p class="mono muted">ERROR {{ code }}</p>
+  <h1>{{ message }}</h1>
+  <p class="hero-actions"><a class="btn btn-primary" href="{{ url_for('home') }}">홈으로</a> <a class="btn btn-sub" href="{{ url_for('search') }}">검색하기</a></p>
+</div>
+{% endblock %}

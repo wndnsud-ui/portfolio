@@ -4,5 +4,19 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .DS_Store
-static/uploads/records/*
 
+# 비밀값
+.env
+
+# 로컬 DB와 업로드 파일 (운영 데이터는 Supabase에 있다)
+instance/
+static/uploads/
+backups/
+
+# 개인 작업 문서·원본 (저장소가 공개라서 올리지 않는다)
+HY ARCHIVE 업무지시서*.md
+design(1).md
+*.zip
+artifacts/
+static/images/모모슬느린책방.png
+static/images/칼로디텍트.png

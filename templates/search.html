@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% from '_components.html' import icon, section_label, post_card, project_card, empty_state %}
+{% block title %}{% if q %}「{{ q }}」 검색{% else %}검색{% endif %} — HY ARCHIVE{% endblock %}
+{% block content %}
+<header class="wrap page-head">
+  {{ section_label('검색', 'search', 'sky') }}
+  <h1>무엇을 찾고 있나요?</h1>
+  <form class="search-box big" method="get" action="{{ url_for('search') }}" role="search">
+    {{ icon('search', 18) }}
+    <label class="sr-only" for="search-q">검색어</label>
+    <input id="search-q" type="search" name="q" value="{{ q }}" placeholder="프로젝트, 기록, 책 이름으로 찾기" autofocus>
+    <button class="btn btn-primary btn-sm" type="submit">찾기</button>
+  </form>
+</header>
+<div class="wrap">
+  {% if q %}
+    <p class="result-count">「{{ q }}」 검색 결과 {{ projects|length + posts|length + books|length }}개</p>
+    {% if projects %}<h2 class="h-small group-title">프로젝트</h2><div class="grid-3">{% for p in projects %}{{ project_card(p) }}{% endfor %}</div>{% endif %}
+    {% if posts %}<h2 class="h-small group-title">기록</h2><div class="grid-3">{% for p in posts %}{{ post_card(p) }}{% endfor %}</div>{% endif %}
+    {% if books %}<h2 class="h-small group-title">책</h2><ul class="etc-list">{% for b in books %}<li><a href="{{ url_for('book_detail', book_id=b.id) }}"><strong>{{ b.title }}</strong><span>{{ b.author or '' }}</span></a></li>{% endfor %}</ul>{% endif %}
+    {% if not projects and not posts and not books %}{{ empty_state('찾는 내용이 아직 없어요. 다른 낱말로 찾아볼까요?', url_for('notes'), '기록 전체 보기', 'search') }}{% endif %}
+  {% endif %}
+</div>
+{% endblock %}

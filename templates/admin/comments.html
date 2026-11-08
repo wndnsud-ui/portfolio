@@ -1,0 +1,26 @@
+{% extends 'admin/_layout.html' %}
+{% block title %}댓글{% endblock %}
+{% block content %}
+<main class="admin-main">
+  <header class="admin-head"><div><h1>댓글</h1><p>방문자가 남긴 댓글을 보고, 숨기거나 지워요.</p></div></header>
+  <div class="table-wrap">
+    <table class="table admin-table">
+      <thead><tr><th scope="col">댓글</th><th scope="col">글</th><th scope="col">작성</th><th scope="col">상태</th><th scope="col"><span class="sr-only">작업</span></th></tr></thead>
+      <tbody>
+        {% for c in comments %}
+        <tr class="{{ 'is-hidden' if c.is_hidden }}">
+          <th scope="row"><strong>{{ c.author }}</strong><br><span class="cell-text">{{ c.content|truncate(140) }}</span></th>
+          <td data-label="글"><a href="{{ post_url(c.record) }}#comments" target="_blank" rel="noopener">{{ c.record.title|truncate(30) }}</a></td>
+          <td data-label="작성" class="mono">{{ c.created_at|date('%Y.%m.%d %H:%M') }}</td>
+          <td data-label="상태">{% if c.is_hidden %}<span class="state is-draft">숨김</span>{% else %}<span class="state is-live">보임</span>{% endif %}</td>
+          <td class="row-actions">
+            <form method="post" action="{{ url_for('admin.toggle_comment', comment_id=c.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sub btn-sm" type="submit">{{ '보이기' if c.is_hidden else '숨기기' }}</button></form>
+            <form method="post" action="{{ url_for('admin.delete_comment', comment_id=c.id) }}" data-confirm><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sub btn-sm danger" type="submit">삭제</button></form>
+          </td>
+        </tr>
+        {% else %}<tr><td colspan="5" class="empty-cell">아직 댓글이 없어요.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</main>
+{% endblock %}

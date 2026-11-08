@@ -1,0 +1,212 @@
+{# 공통 화면 조각 (7-9장). 헤더·푸터·카드·칩·버튼·영상 카드·빈 상태·본문 블록은 여기서만 정의한다. #}
+
+{# ---------------------------------------------------------------- 선 아이콘 (굵기 2, 15~18px) #}
+{% macro icon(name, size=16) -%}
+<svg class="ico" width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+  {%- if name == 'folder' -%}<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+  {%- elif name == 'note' -%}<path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>
+  {%- elif name == 'book' -%}<path d="M6 4h11a1 1 0 0 1 1 1v15H7a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1z"/><path d="M5 18a2 2 0 0 1 2-2h11"/>
+  {%- elif name == 'clock' -%}<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>
+  {%- elif name == 'leaf' -%}<path d="M5 19c0-8 5-13 14-14-1 9-6 14-14 14z"/><path d="M5 19l7-7"/>
+  {%- elif name == 'sofa' -%}<path d="M5 11V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/><path d="M3 13a2 2 0 0 1 4 0v1h10v-1a2 2 0 0 1 4 0v4H3z"/><path d="M6 17v2M18 17v2"/>
+  {%- elif name == 'search' -%}<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>
+  {%- elif name == 'download' -%}<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>
+  {%- elif name == 'play' -%}<path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none"/>
+  {%- elif name == 'youtube' -%}<rect x="2.5" y="5.5" width="19" height="13" rx="4" fill="currentColor" stroke="none"/><path d="M10.2 9.2v5.6l4.8-2.8z" fill="var(--card)" stroke="none"/>
+  {%- elif name == 'heart' -%}<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>
+  {%- elif name == 'link' -%}<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>
+  {%- elif name == 'menu' -%}<path d="M4 7h16M4 12h16M4 17h16"/>
+  {%- elif name == 'close' -%}<path d="M6 6l12 12M18 6L6 18"/>
+  {%- elif name == 'grid' -%}<rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/>
+  {%- elif name == 'pen' -%}<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/>
+  {%- elif name == 'chat' -%}<path d="M5 5h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 3V6a1 1 0 0 1 1-1z"/>
+  {%- elif name == 'sync' -%}<path d="M20 11a8 8 0 0 0-14.3-4.3L4 9"/><path d="M4 4v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.3L20 15"/><path d="M20 20v-5h-5"/>
+  {%- elif name == 'tv' -%}<rect x="3" y="6" width="18" height="12" rx="3"/><path d="M9 3l3 3 3-3"/>
+  {%- elif name == 'user' -%}<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>
+  {%- endif -%}
+</svg>
+{%- endmacro %}
+
+{# ---------------------------------------------------------------- 칩·배지·라벨 #}
+{% macro chip(text, t='sky', cls='') -%}<span class="chip tint-{{ t }} {{ cls }}">{{ text }}</span>{%- endmacro %}
+
+{% macro status_badge(text, live=true) -%}
+<span class="status-badge {{ 'is-live' if live else 'is-soon' }}"><i aria-hidden="true"></i>{{ text }}</span>
+{%- endmacro %}
+
+{% macro section_label(text, ico='folder', t='sky') -%}
+<p class="section-label tint-{{ t }}">{{ icon(ico, 15) }}<span>{{ text }}</span></p>
+{%- endmacro %}
+
+{% macro empty_state(text, href=none, label='전체 보기', ico='note') -%}
+<div class="empty-state">
+  {{ icon(ico, 18) }}
+  <p>{{ text }}</p>
+  {% if href %}<a class="btn btn-sub btn-sm" href="{{ href }}">{{ label }}</a>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro avatar(profile, size='md') -%}
+<span class="avatar avatar-{{ size }}">{% if profile and profile.photo %}<img src="{{ profile.photo }}" alt="{{ profile.name }} 프로필 사진">{% else %}<b aria-hidden="true">HY</b>{% endif %}</span>
+{%- endmacro %}
+
+{# ---------------------------------------------------------------- 프로젝트 #}
+{% macro project_media(project, t) -%}
+<div class="media tint-{{ t }}">{% if project.image %}<img src="{{ project.image }}" alt="{{ project.title }} 화면" loading="lazy">{% else %}<span class="media-name">{{ project.title }}</span>{% endif %}</div>
+{%- endmacro %}
+
+{# 홈: 세로 카드 (이미지 + 분류 칩 + 문제→해결 한 문장 + 기술) #}
+{% macro project_card(project) -%}
+{% set t = project_tint(project) %}
+<a class="card project-card" href="{{ project_url(project) }}">
+  {{ project_media(project, t) }}
+  <div class="card-body">
+    <div class="card-head"><h3>{{ project.title }}</h3>{% if project.category %}{{ chip(project.category, t) }}{% endif %}</div>
+    <p class="card-text">{{ project.description or project.subtitle or '' }}</p>
+    {% if project.tech_list %}<p class="mono-line">{{ project.tech_list|join(' · ') }}</p>{% endif %}
+  </div>
+</a>
+{%- endmacro %}
+
+{# 프로젝트 목록: 가로 큰 카드 #}
+{% macro project_row(project, index) -%}
+{% set t = project_tint(project) %}
+<a class="card project-row" href="{{ project_url(project) }}">
+  {{ project_media(project, t) }}
+  <div class="card-body">
+    <p class="row-meta"><span class="mono">{{ '%02d'|format(index) }}</span>{% if project.category %}{{ chip(project.category, t) }}{% endif %}</p>
+    <h2>{{ project.title }}</h2>
+    {% if project.subtitle %}<p class="row-sub">{{ project.subtitle }}</p>{% endif %}
+    {% if project.description %}<p class="row-desc">{{ project.description }}</p>{% endif %}
+    <dl class="kv">
+      {% if project.role %}<div><dt>역할</dt><dd>{{ project.role }}</dd></div>{% endif %}
+      {% if project.tech_list %}<div><dt>기술</dt><dd class="mono">{{ project.tech_list|join(' · ') }}</dd></div>{% endif %}
+    </dl>
+    <span class="text-btn tint-{{ t }}">케이스 스터디 읽기 <i class="arrow" aria-hidden="true">→</i></span>
+  </div>
+</a>
+{%- endmacro %}
+
+{# ---------------------------------------------------------------- 기록 #}
+{% macro post_card(post) -%}
+<a class="card post-card" href="{{ post_url(post) }}">
+  <div class="post-card-top">{{ chip(post_label(post), post_tint(post)) }}<time class="mono">{{ post.display_date|date }}</time></div>
+  <h3>{{ post.title }}</h3>
+  <p class="card-text">{{ post.summary or (post.blocks|excerpt) }}</p>
+  <div class="post-card-foot"><span>{{ post.blocks|minutes }}분 읽기 · 조회 {{ post.view_count or 0 }}</span><i class="arrow" aria-hidden="true">→</i></div>
+</a>
+{%- endmacro %}
+
+{# 홈 최근 기록 한 줄 #}
+{% macro post_row(post) -%}
+<a class="post-row" href="{{ post_url(post) }}" data-type="{{ TYPE_OF_KIND.get(post.content_type, 'study') }}">
+  {{ chip(post_label(post), post_tint(post)) }}
+  <span class="post-row-text"><strong>{{ post.title }}</strong><small>{{ post.summary or (post.blocks|excerpt(60)) }}</small></span>
+  <time class="mono">{{ post.display_date|date('%m.%d') }}</time>
+</a>
+{%- endmacro %}
+
+{# ---------------------------------------------------------------- 독서 #}
+{% macro book_cover(book, cls='') -%}
+<div class="book-cover {{ cls }}">{% if book.cover_image %}<img src="{{ book.cover_image }}" alt="{{ book.title }} 표지" loading="lazy">{% else %}<span class="cover-fallback"><strong>{{ book.title }}</strong><small>{{ book.author or '' }}</small></span>{% endif %}</div>
+{%- endmacro %}
+
+{% macro stars(rating) -%}
+{% set r = (rating or 0)|round|int %}
+<span class="stars" aria-label="별점 {{ rating or 0 }}점">{% for i in range(5) %}<i class="{{ 'on' if i < r }}">★</i>{% endfor %}</span>
+{%- endmacro %}
+
+{# ---------------------------------------------------------------- 영상 카드 (16:9 썸네일 + 가운데 재생 버튼 + 오른쪽 아래 길이) #}
+{% macro video_card(video, item, label=none) -%}
+<button type="button" class="card video-card" data-video="{{ video.youtube_id }}" data-title="{{ label or video.title }}" data-date="{{ video.published_at or '' }}" data-watch="{{ video.watch_url }}">
+  <span class="video-thumb tint-{{ item.tint }}">
+    <img src="{{ video.thumbnail }}" alt="" loading="lazy">
+    <span class="play" aria-hidden="true">{{ icon('play', 18) }}</span>
+    {% if video.duration %}<span class="duration mono">{{ video.duration }}</span>{% endif %}
+  </span>
+  <span class="video-body"><strong>{{ label or video.title }}</strong>{% if video.published_at %}<small>{{ video.published_at }}</small>{% endif %}<span class="sr-only"> — 미리보기 열기</span></span>
+</button>
+{%- endmacro %}
+
+{# ---------------------------------------------------------------- 본문 블록 #}
+{% macro block(b) -%}
+  {%- set al = (' align-' ~ b.align) if b.align else '' -%}
+  {%- if b.type == 'paragraph' -%}
+    <p class="b-p{{ al }}">{{ b.rich|safe if b.rich else b.text|nl2br }}</p>
+  {%- elif b.type == 'heading' -%}
+    <h2 class="b-h{{ al }}" id="{{ b.anchor }}">{{ b.text }}</h2>
+  {%- elif b.type == 'image' -%}
+    <figure class="b-img">
+      <img src="{{ b.url }}" alt="{{ b.caption or '' }}" loading="lazy">
+      {% if b.caption %}<figcaption>{{ b.caption }}</figcaption>{% endif %}
+    </figure>
+  {%- elif b.type == 'image2' -%}
+    <figure class="b-img2">
+      <div class="b-img2-grid">
+        {% if b.url %}<img src="{{ b.url }}" alt="" loading="lazy">{% endif %}
+        {% if b.url2 %}<img src="{{ b.url2 }}" alt="" loading="lazy">{% endif %}
+      </div>
+      {% if b.caption %}<figcaption>{{ b.caption }}</figcaption>{% endif %}
+    </figure>
+  {%- elif b.type == 'quote' -%}
+    <blockquote class="b-quote{{ al }}"><p>{{ b.rich|safe if b.rich else b.text|nl2br }}</p>{% if b.cite %}<cite>{{ b.cite }}</cite>{% endif %}</blockquote>
+  {%- elif b.type == 'callout' -%}
+    <div class="b-callout{{ al }}">{{ b.rich|safe if b.rich else b.text|nl2br }}</div>
+  {%- elif b.type == 'divider' -%}
+    <hr class="b-hr">
+  {%- elif b.type == 'markdown' -%}
+    <div class="b-md">{{ b.html }}</div>
+  {%- elif b.type == 'youtube' -%}
+    <figure class="b-embed b-youtube">
+      <div class="embed-frame"><iframe src="https://www.youtube-nocookie.com/embed/{{ b.video_id }}?rel=0" title="{{ b.caption or '유튜브 영상' }}" loading="lazy"
+        allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>
+      <figcaption>{% if b.caption %}{{ b.caption }} · {% endif %}<a href="{{ b.url }}" target="_blank" rel="noopener">유튜브에서 보기 ↗</a></figcaption>
+    </figure>
+  {%- elif b.type == 'instagram' -%}
+    <figure class="b-embed b-instagram">
+      <iframe src="{{ b.url }}embed/" title="{{ b.caption or '인스타그램 게시물' }}" loading="lazy" scrolling="no"></iframe>
+      <figcaption>{% if b.caption %}{{ b.caption }} · {% endif %}<a href="{{ b.url }}" target="_blank" rel="noopener">인스타그램에서 보기 ↗</a></figcaption>
+    </figure>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro body(blocks) -%}
+  <div class="post-body">{% for b in blocks %}{{ block(b) }}{% endfor %}</div>
+{%- endmacro %}
+
+{% macro toc_card(toc, title='목차') -%}
+  {% if toc %}
+  <nav class="side-card toc" aria-label="{{ title }}">
+    <p class="side-title">{{ title }}</p>
+    <ol>{% for t in toc %}<li class="lvl-{{ t.level }}"><a href="#{{ t.anchor }}">{{ t.text }}</a></li>{% endfor %}</ol>
+  </nav>
+  {% endif %}
+{%- endmacro %}
+
+{% macro pager(pagination, endpoint, params) -%}
+  {% if pagination.pages > 1 %}
+  <nav class="pager" aria-label="페이지">
+    {% if pagination.has_prev %}<a href="{{ url_for(endpoint, page=pagination.prev_num, **params) }}" aria-label="이전 페이지">←</a>{% endif %}
+    {% for n in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+      {% if n %}<a href="{{ url_for(endpoint, page=n, **params) }}" class="{{ 'is-active' if n == pagination.page }}" {% if n == pagination.page %}aria-current="page"{% endif %}>{{ n }}</a>
+      {% else %}<span>…</span>{% endif %}
+    {% endfor %}
+    {% if pagination.has_next %}<a href="{{ url_for(endpoint, page=pagination.next_num, **params) }}" aria-label="다음 페이지">→</a>{% endif %}
+  </nav>
+  {% endif %}
+{%- endmacro %}
+
+{# ---------------------------------------------------------------- 푸터 연락 박스 #}
+{% macro contact_box(profile, big=false) -%}
+<section class="contact-box{{ ' is-big' if big }}" aria-label="연락하기">
+  <div>
+    {% if big %}<p class="contact-eyebrow">함께 일할 곳을 찾고 있어요</p>{% endif %}
+    <p class="contact-title">복잡한 일, 같이 정리해 볼까요?</p>
+  </div>
+  <div class="contact-actions">
+    {% if profile and profile.email %}<a class="btn btn-marker" href="mailto:{{ profile.email }}">{{ profile.email }}</a>{% endif %}
+    <a class="btn btn-ghost" href="{{ profile.resume_url if profile and profile.resume_url else url_for('about') }}"{% if profile and profile.resume_url %} target="_blank" rel="noopener"{% endif %}>{{ '이력서 PDF' if big else '이력서' }}</a>
+    {% if profile and (profile.github or '').startswith('http') %}<a class="btn btn-ghost" href="{{ profile.github }}" target="_blank" rel="noopener">GitHub</a>{% endif %}
+  </div>
+</section>
+{%- endmacro %}

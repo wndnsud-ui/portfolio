@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% from '_components.html' import icon, section_label, post_card, pager, empty_state %}
+{% block title %}기록{% if type %} · {{ NOTE_TYPES[type][0] }}{% endif %} — HY ARCHIVE{% endblock %}
+{% block description %}공부와 일, 책, 일상을 차곡차곡 모아 두었어요.{% endblock %}
+{% block content %}
+{% set params = {'type': type or None, 'q': q or None, 'sort': sort if sort != 'latest' else None} %}
+<header class="wrap page-head with-side">
+  <div>
+    {{ section_label('기록', 'note', 'sky') }}
+    <h1>배우고, 읽고, 생각한 것들</h1>
+    <p class="lead">공부와 일, 책, 일상을 차곡차곡 모아 두었어요.</p>
+  </div>
+  <form class="search-box" method="get" action="{{ url_for('notes') }}" role="search">
+    {% if type %}<input type="hidden" name="type" value="{{ type }}">{% endif %}
+    {% if sort != 'latest' %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
+    {{ icon('search', 16) }}
+    <label class="sr-only" for="notes-q">기록 검색</label>
+    <input id="notes-q" type="search" name="q" value="{{ q }}" placeholder="제목, 내용, 태그로 찾기">
+  </form>
+</header>
+
+<div class="wrap tools-row">
+  <nav class="tabs" aria-label="분류">
+    {% for key, label, count, t in tabs %}
+    <a class="tab{{ ' is-active' if type == key }}{{ ' tint-' ~ t if t }}" href="{{ url_for('notes', type=key or None, q=q or None, sort=params.sort) }}"{% if type == key %} aria-current="page"{% endif %}><i class="tab-dot" aria-hidden="true"></i>{{ label }} <b>{{ count }}</b></a>
+    {% endfor %}
+  </nav>
+  <form class="sort-form" method="get" action="{{ url_for('notes') }}">
+    {% if type %}<input type="hidden" name="type" value="{{ type }}">{% endif %}
+    {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+    <label for="notes-sort">정렬</label>
+    <select id="notes-sort" name="sort" data-autosubmit>
+      <option value="latest" {{ 'selected' if sort == 'latest' }}>최신순</option>
+      <option value="popular" {{ 'selected' if sort == 'popular' }}>많이 읽은 순</option>
+    </select>
+    <noscript><button class="btn btn-sub btn-sm" type="submit">적용</button></noscript>
+  </form>
+</div>
+
+<div class="wrap">
+  <p class="result-count">{% if q %}「{{ q }}」 검색 결과 {% else %}기록 {% endif %}{{ pagination.total }}개{% if q or type %} · <a href="{{ url_for('notes') }}">조건 지우기</a>{% endif %}</p>
+  {% if pagination.items %}
+  <div class="grid-3">{% for post in pagination.items %}{{ post_card(post) }}{% endfor %}</div>
+  {% else %}
+  {{ empty_state('조건에 맞는 기록이 아직 없어요. 다른 낱말로 찾아볼까요?' if q else '이 분류의 기록은 아직 없어요. 곧 채워 둘게요.', url_for('notes')) }}
+  {% endif %}
+  {{ pager(pagination, 'notes', params) }}
+</div>
+{% endblock %}

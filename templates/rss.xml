@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+  <title>HY ARCHIVE</title>
+  <link>{{ url_for('home', _external=True) }}</link>
+  <description>최혜영의 기록 — Notes · Life · Reading</description>
+  <language>ko</language>
+{% for item in items %}  <item>
+    <title>{{ item.title }}</title>
+    <link>{{ item.link }}</link>
+    <guid>{{ item.link }}</guid>
+    <category>{{ item.category }}</category>
+    <pubDate>{{ item.date }}</pubDate>
+    <description>{{ item.summary }}</description>
+  </item>
+{% endfor %}</channel>
+</rss>

@@ -1,275 +1,449 @@
-from pathlib import Path
-from uuid import uuid4
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file, abort
-import markdown
-from sqlalchemy import inspect, or_, text
-from werkzeug.utils import secure_filename
+import os
+from datetime import datetime
+from email.utils import format_datetime
+
+import click
+from flask import Flask, Response, abort, flash, redirect, render_template, request, session, url_for
+from flask_migrate import Migrate
+from flask_wtf.csrf import CSRFProtect
+from sqlalchemy import String, case, cast, func, or_
+from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.security import generate_password_hash
+
+from auth import is_admin
 from config import Config
-from models import db, Profile, Project, Experience, Skill, Archive, RecordComment
-from seed import seed_database
+from content import (
+    BLOCK_TYPES, BOOK_STATUS, BOOK_STATUS_TINT, CATEGORIES, DESIGN_OPTIONS, KINDS, NOTE_TYPES, SINGLE_KINDS, SKILL_GROUPS,
+    TYPE_OF_KIND, design_classes, highlight, nl2br, normalize_design, plain, plain_excerpt, read_minutes, render_body, tint,
+)
+from models import Archive, Book, Experience, Profile, Project, ReadingNote, RecordComment, Showcase, Skill, db
 
 app = Flask(__name__)
 app.config.from_object(Config)
-Path(app.instance_path).mkdir(parents=True, exist_ok=True)
-RECORD_UPLOAD_DIR = Path(app.static_folder) / "uploads" / "records"
-RECORD_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
-BLOG_CATEGORIES = ["맛집 · 카페", "여행", "사주 연구", "독서 모임"]
-ARCHIVE_CATEGORIES = ["AI / ML", "DATA", "DEVELOPMENT", "PROJECT", "LECTURE", "CERTIFICATION", "WORK", "THINKING"]
+if os.environ.get("DATABASE_URL") and not os.environ.get("SECRET_KEY"):
+    raise RuntimeError("운영 환경(DATABASE_URL 설정됨)에서는 SECRET_KEY 환경변수가 필요합니다.")
+# Railway 등 앞단 프록시가 붙인 X-Forwarded-* 를 한 단계만 믿는다 (https 주소, 방문자 IP)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 db.init_app(app)
+migrate = Migrate(app, db, render_as_batch=True)
+csrf = CSRFProtect(app)
 
-with app.app_context():
-    db.create_all()
-    # create_all() does not add columns to an existing SQLite table.
-    existing = {column["name"] for column in inspect(db.engine).get_columns("archive")}
-    record_columns = {"content_type": "VARCHAR(40) NOT NULL DEFAULT 'archive'", "tags": "VARCHAR(400)", "thumbnail": "VARCHAR(400)", "source_type": "VARCHAR(80)", "source_url": "VARCHAR(400)", "is_featured": "BOOLEAN NOT NULL DEFAULT 0", "is_pinned": "BOOLEAN NOT NULL DEFAULT 0", "view_count": "INTEGER NOT NULL DEFAULT 0", "like_count": "INTEGER NOT NULL DEFAULT 0", "recommendation_count": "INTEGER NOT NULL DEFAULT 0"}
-    for name, definition in record_columns.items():
-        if name not in existing:
-            db.session.execute(text(f"ALTER TABLE archive ADD COLUMN {name} {definition}"))
-    db.session.commit()
-    seed_database()
-    project_links = {
-        "Mood Code": ("https://mood-code-latest.onrender.com/", "/static/images/moodcode.png"),
-        "CaloDetect": ("https://iris-app-app-huwkr4lpdcttdyjviv6cec.streamlit.app/", "/static/images/calodetect.svg"),
-    }
-    for title, (url, thumbnail) in project_links.items():
-        project = Project.query.filter_by(title=title).first()
-        if project:
-            project.github_url = url
-            project.thumbnail = thumbnail
-    db.session.commit()
+from admin import admin_bp  # noqa: E402  (admin이 app의 헬퍼를 쓰므로 뒤에서 등록)
+
+app.register_blueprint(admin_bp)
+
+PAGE_SIZE = 12
+COMMENT_LIMIT = 500
+
+
+# ------------------------------------------------------------------ 템플릿 도우미
+app.jinja_env.filters.update(nl2br=nl2br, design_classes=design_classes, excerpt=plain_excerpt, hl=highlight,
+                             plain=plain, minutes=read_minutes)
+
+
+@app.template_filter("date")
+def format_date(value, fmt="%Y.%m.%d"):
+    return value.strftime(fmt) if value else ""
+
+
+def post_url(post, external=False):
+    return url_for("notes_detail", key=post.slug or post.id, _external=external)
+
+
+def project_url(project, external=False):
+    return url_for("project_detail", key=project.slug or project.id, _external=external)
+
+
+def post_label(post):
+    """기록 카드의 분류 칩 글자: 독서 노트는 「독서」로 짧게."""
+    return "독서" if post.content_type == "reading" else post.category
+
+
+def post_tint(post):
+    return tint(post.category, tint(post.content_type))
+
+
+def project_tint(project):
+    return normalize_design(project.design, "project")["accent"]
+
+
+# 매크로(_components.html)에서도 쓰므로 요청과 무관한 도우미는 전역으로 등록한다
+app.jinja_env.globals.update(
+    post_url=post_url, project_url=project_url, post_label=post_label, post_tint=post_tint, project_tint=project_tint, tint=tint, KINDS=KINDS,
+    SINGLE_KINDS=SINGLE_KINDS, DESIGN_OPTIONS=DESIGN_OPTIONS, BLOCK_TYPES=BLOCK_TYPES, CATEGORIES=CATEGORIES,
+    NOTE_TYPES=NOTE_TYPES, TYPE_OF_KIND=TYPE_OF_KIND, SKILL_GROUPS=SKILL_GROUPS, BOOK_STATUS=BOOK_STATUS,
+    BOOK_STATUS_TINT=BOOK_STATUS_TINT,
+)
+
 
 @app.context_processor
-def globals_for_templates():
-    return {"profile": Profile.query.first(), "project_count": Project.query.count(), "archive_count": Archive.query.filter_by(content_type="archive").count(), "skill_count": Skill.query.count(), "blog_categories": BLOG_CATEGORIES, "archive_categories": ARCHIVE_CATEGORIES}
+def template_globals():
+    return {"profile": Profile.query.first(), "is_admin": is_admin(), "now": datetime.utcnow(),
+            "showcases": Showcase.query.order_by(Showcase.sort_order, Showcase.id).all()}
 
-@app.route("/profile-image")
-def profile_image():
-    image = Path(app.root_path).parent / "profile" / "image" / "IMG_6733.jpeg"
-    if not image.exists(): abort(404)
-    return send_file(image)
 
+# ------------------------------------------------------------------ 조회 도우미
+def by_key(query, model, key):
+    if str(key).isdigit():
+        item = query.filter(model.id == int(key)).first()
+        if item:
+            return item
+    return query.filter(model.slug == str(key)).first()
+
+
+def date_order():
+    return func.coalesce(Archive.published_at, Archive.created_at)
+
+
+def search_filter(model, q):
+    like = f"%{q}%"
+    columns = [model.title, cast(model.blocks, String)]
+    if model is Archive:
+        columns += [Archive.summary, Archive.content, Archive.tags, Archive.category]
+    else:
+        columns += [Project.subtitle, Project.description, Project.problem, Project.result, Project.tech_stack]
+    return or_(*[column.ilike(like) for column in columns])
+
+
+def bump_views(item):
+    if not is_admin():
+        item.view_count = (item.view_count or 0) + 1
+        db.session.commit()
+
+
+DEFAULT_STATS = [
+    {"label": "업무운영 경력", "value": "20년", "note": "감정평가법인 5곳"},
+    {"label": "마지막 직책", "value": "팀장", "note": "㈜통일감정평가법인 차장"},
+    {"label": "만든 서비스", "value": "3개", "note": "기획부터 구현까지"},
+    {"label": "지금 배우는 것", "value": "AI Agent", "note": "Python · SQL · FastAPI"},
+]
+STAT_TINTS = ["butter", "mint", "sky", "pink"]
+
+
+def home_stats(profile):
+    stats = [s for s in ((profile.stats if profile else None) or []) if isinstance(s, dict) and s.get("value")]
+    return (stats or DEFAULT_STATS)[:4]
+
+
+def skill_groups():
+    groups = {}
+    for skill in Skill.query.order_by(Skill.sort_order, Skill.id).all():
+        groups.setdefault(skill.category, []).append(skill)
+    order = list(SKILL_GROUPS)
+    return sorted(groups.items(), key=lambda kv: order.index(kv[0]) if kv[0] in order else len(order))
+
+
+def experiences(kind=None):
+    query = Experience.query.order_by(Experience.sort_order, Experience.id)
+    return query.filter(Experience.kind == kind).all() if kind else query.all()
+
+
+# ------------------------------------------------------------------ 홈
 @app.route("/")
 def home():
-    return render_template("home-reference.html", projects=Project.query.order_by(Project.id).all(), experiences=Experience.query.order_by(Experience.sort_order).all(), skills=Skill.query.order_by(Skill.category, Skill.sort_order).all(), archives=Archive.query.filter_by(content_type="archive").order_by(Archive.created_at.desc()).limit(5).all())
+    profile = Profile.query.first()
+    projects = Project.visible().order_by(Project.sort_order, Project.id).limit(3).all()
+    recent = (Archive.visible().order_by(Archive.is_pinned.desc(), date_order().desc()).limit(12).all())
+    reading = (Book.query.filter(Book.status == "reading").order_by(Book.updated_at.desc()).first()
+               or Book.query.filter(Book.status == "completed").order_by(Book.updated_at.desc()).first())
+    reading_post = None
+    if reading:
+        reading_post = (Archive.visible().filter(Archive.book_id == reading.id).order_by(date_order().desc()).first())
+    return render_template("home.html", projects=projects, recent=recent, reading=reading, reading_post=reading_post,
+                           stats=home_stats(profile), stat_tints=STAT_TINTS, timeline=experiences()[:3],
+                           skills=skill_groups())
 
+
+# ------------------------------------------------------------------ 프로젝트
 @app.route("/projects")
-def projects(): return render_template("projects/list.html", projects=Project.query.order_by(Project.id).all())
+def projects():
+    items = Project.visible().order_by(Project.sort_order, Project.id).all()
+    return render_template("projects/list.html", projects=items)
 
-@app.route("/projects/<int:project_id>")
-def project_detail(project_id):
-    project = Project.query.get_or_404(project_id)
-    return render_template("projects/detail.html", project=project)
 
-@app.route("/archive")
-def archive():
-    category = request.args.get("category", "ALL")
-    query = Archive.query.filter_by(content_type="archive").order_by(Archive.created_at.desc())
-    if category != "ALL": query = query.filter_by(category=category)
-    return render_template("archive/list.html", archives=query.all(), category=category)
+@app.route("/projects/<key>")
+def project_detail(key):
+    query = Project.query if is_admin() else Project.visible()
+    project = by_key(query, Project, key) or abort(404)
+    bump_views(project)
+    body, toc, minutes = render_body(project.blocks)
+    ordered = Project.visible().order_by(Project.sort_order, Project.id).all()
+    index = next((i for i, p in enumerate(ordered) if p.id == project.id), None)
+    next_item = None
+    if index is not None and len(ordered) > 1:
+        next_item = ordered[(index + 1) % len(ordered)]
+    return render_template("projects/detail.html", project=project, body=body, toc=toc, minutes=minutes,
+                           design=normalize_design(project.design, "project"), next_item=next_item)
 
-@app.route("/archive/<int:archive_id>")
-def archive_detail(archive_id):
-    record = Archive.query.filter_by(content_type="archive", id=archive_id).first_or_404()
-    record.view_count += 1; db.session.commit()
-    rendered_content = markdown.markdown(record.content or "", extensions=["extra", "fenced_code", "tables"])
-    return render_template("records/detail.html", record=record, rendered_content=rendered_content, back_url=url_for("archive"), back_label="아카이브")
 
-def content_detail_url(record):
-    if record.content_type == "blog": return url_for("blog_detail", record_id=record.id)
-    if record.content_type == "archive": return url_for("archive_detail", archive_id=record.id)
-    return url_for("record_detail", record_id=record.id)
+@app.route("/portfolio")
+def portfolio():
+    """기획 포트폴리오 장문 페이지(14장 시안 기반)."""
+    return render_template("pages/portfolio.html", projects=Project.visible().order_by(Project.sort_order, Project.id).all())
 
-def record_query():
+
+# ------------------------------------------------------------------ 기록 (공부·업무 / 독서 / 일상)
+@app.route("/notes")
+def notes():
+    type_ = request.args.get("type", "")
+    type_ = type_ if type_ in NOTE_TYPES else ""
+    q = request.args.get("q", "").strip()[:80]
     sort = request.args.get("sort", "latest")
-    query = Archive.query
-    if sort == "popular": query = query.order_by(Archive.recommendation_count.desc(), Archive.like_count.desc(), Archive.view_count.desc(), Archive.created_at.desc())
-    else: query = query.order_by(Archive.is_pinned.desc(), Archive.created_at.desc())
-    category = request.args.get("category", "ALL")
-    if category != "ALL": query = query.filter_by(category=category)
-    return query, category, sort
+    page = request.args.get("page", 1, type=int)
+    base = Archive.visible()
+    counts = dict(base.with_entities(Archive.content_type, func.count(Archive.id)).group_by(Archive.content_type).all())
+    query = base
+    if type_:
+        query = query.filter(Archive.content_type == NOTE_TYPES[type_][1])
+    if q:
+        query = query.filter(search_filter(Archive, q))
+    if sort == "popular":
+        query = query.order_by(Archive.view_count.desc(), Archive.like_count.desc(), date_order().desc())
+    else:
+        sort = "latest"
+        query = query.order_by(Archive.is_pinned.desc(), date_order().desc())
+    pagination = query.paginate(page=page, per_page=PAGE_SIZE, error_out=False)
+    tabs = [("", "전체", sum(counts.values()), "")] + [
+        (key, label, counts.get(kind, 0), tint(key)) for key, (label, kind) in NOTE_TYPES.items()]
+    return render_template("posts/list.html", pagination=pagination, tabs=tabs, type=type_, q=q, sort=sort)
 
+
+@app.route("/notes/<key>")
+def notes_detail(key):
+    query = Archive.query if is_admin() else Archive.visible()
+    post = by_key(query, Archive, key) or abort(404)
+    bump_views(post)
+    body, toc, minutes = render_body(post.blocks)
+    related = (Archive.visible().filter(Archive.id != post.id)
+               .order_by((Archive.content_type == post.content_type).desc(), date_order().desc()).limit(3).all())
+    liked = post.id in session.get("liked_records", [])
+    return render_template("posts/detail.html", post=post, body=body, toc=toc, minutes=minutes,
+                           design=normalize_design(post.design, post.content_type), related=related, liked=liked,
+                           comment_limit=COMMENT_LIMIT)
+
+
+@app.post("/posts/<int:post_id>/like")
+def like_post(post_id):
+    post = Archive.visible().filter(Archive.id == post_id).first_or_404()
+    liked = set(session.get("liked_records", []))
+    if post_id in liked:
+        post.like_count = max(0, post.like_count - 1)
+        liked.discard(post_id)
+    else:
+        post.like_count += 1
+        liked.add(post_id)
+    session["liked_records"] = sorted(liked)
+    db.session.commit()
+    return redirect(post_url(post) + "#reactions")
+
+
+@app.post("/posts/<int:post_id>/comments")
+def add_comment(post_id):
+    post = Archive.visible().filter(Archive.id == post_id).first_or_404()
+    if request.form.get("website"):  # 숨김 필드: 사람에게는 보이지 않으므로 값이 있으면 자동 입력으로 본다
+        return redirect(post_url(post) + "#comments")
+    author = (request.form.get("author", "").strip() or "익명")[:40]
+    content = request.form.get("content", "").strip()
+    if not content:
+        flash("댓글 내용을 적어 주세요.", "error")
+    elif len(content) > COMMENT_LIMIT:
+        flash(f"댓글은 {COMMENT_LIMIT}자까지 쓸 수 있어요.", "error")
+    else:
+        db.session.add(RecordComment(record_id=post.id, author=author, content=content))
+        db.session.commit()
+        flash("댓글을 남겼어요. 고마워요!", "success")
+    return redirect(post_url(post) + "#comments")
+
+
+# ------------------------------------------------------------------ 독서
+@app.route("/reading")
+def reading():
+    status = request.args.get("status", "")
+    status = status if status in BOOK_STATUS else ""
+    query = Book.query
+    if status:
+        query = query.filter(Book.status == status)
+    order = case((Book.status == "reading", 0), (Book.status == "completed", 1), else_=2)
+    books = query.order_by(order, Book.updated_at.desc()).all()
+    note_rows = (Archive.visible().filter(Archive.content_type == "reading", Archive.book_id.isnot(None))
+                 .with_entities(Archive.book_id, func.count(Archive.id), func.max(date_order()))
+                 .group_by(Archive.book_id).all())
+    notes_by_book = {book_id: (count, last) for book_id, count, last in note_rows}
+    return render_template("reading/list.html", books=books, status=status, total=Book.query.count(),
+                           note_total=Archive.visible().filter(Archive.content_type == "reading").count(),
+                           notes_by_book=notes_by_book)
+
+
+@app.route("/reading/books/<int:book_id>")
+def book_detail(book_id):
+    book = Book.query.get_or_404(book_id)
+    posts = (Archive.visible().filter(Archive.content_type == "reading", Archive.book_id == book.id)
+             .order_by(date_order().desc()).all())
+    legacy = ReadingNote.query.filter_by(book_id=book.id).order_by(ReadingNote.id).all()
+    return render_template("reading/book.html", book=book, posts=posts, legacy=legacy)
+
+
+# ------------------------------------------------------------------ 소개·이력서
+@app.route("/about")
+def about():
+    profile = Profile.query.first()
+    body, toc, minutes = render_body(profile.blocks if profile else [])
+    return render_template("about.html", body=body, work=experiences("work"), education=experiences("edu"),
+                           skills=skill_groups(), projects=Project.visible().order_by(Project.sort_order, Project.id).all())
+
+
+# ------------------------------------------------------------------ 운영 중인 곳
+def showcase_page(slug):
+    item = Showcase.query.filter_by(slug=slug).first_or_404()
+    series = Project.visible().filter(Project.title.contains("느린책방")).first() if slug == "rest" else None
+    return render_template("showcase.html", item=item, videos=item.visible_videos, series=series)
+
+
+@app.route("/rest")
+def rest():
+    return showcase_page("rest")
+
+
+@app.route("/sofa")
+def sofa():
+    return showcase_page("sofa")
+
+
+# ------------------------------------------------------------------ 검색·피드
+@app.route("/search")
+def search():
+    q = request.args.get("q", "").strip()[:80]
+    projects_found, posts_found, books_found = [], [], []
+    if q:
+        like = f"%{q}%"
+        projects_found = Project.visible().filter(search_filter(Project, q)).limit(10).all()
+        posts_found = Archive.visible().filter(search_filter(Archive, q)).order_by(date_order().desc()).limit(30).all()
+        books_found = Book.query.filter(or_(Book.title.ilike(like), Book.author.ilike(like))).limit(10).all()
+    return render_template("search.html", q=q, projects=projects_found, posts=posts_found, books=books_found)
+
+
+@app.route("/sitemap.xml")
+def sitemap():
+    pages = [url_for(name, _external=True) for name in ("home", "projects", "notes", "reading", "about", "rest", "sofa")]
+    for project in Project.visible().all():
+        pages.append(project_url(project, external=True))
+    for post in Archive.visible().all():
+        pages.append(post_url(post, external=True))
+    for book in Book.query.all():
+        pages.append(url_for("book_detail", book_id=book.id, _external=True))
+    return Response(render_template("sitemap.xml", pages=pages), mimetype="application/xml")
+
+
+@app.route("/rss.xml")
+def rss():
+    posts = Archive.visible().order_by(date_order().desc()).limit(30).all()
+    items = [{"title": p.title, "link": post_url(p, external=True), "summary": p.summary or plain_excerpt(p.blocks, 300),
+              "date": format_datetime(p.display_date) if p.display_date else "", "category": p.category} for p in posts]
+    return Response(render_template("rss.xml", items=items), mimetype="application/rss+xml")
+
+
+@app.route("/robots.txt")
+def robots():
+    body = f"User-agent: *\nDisallow: /admin\nSitemap: {url_for('sitemap', _external=True)}\n"
+    return Response(body, mimetype="text/plain")
+
+
+# ------------------------------------------------------------------ 예전 URL 연결
+@app.route("/archive")
 @app.route("/records")
-def records():
-    query, category, sort = record_query()
-    return render_template("records/list.html", records=query.all(), category=category, sort=sort)
+def legacy_notes():
+    return redirect(url_for("notes", **request.args), 301)
+
 
 @app.route("/blog")
-def blog():
-    category = request.args.get("category", "ALL")
-    search = request.args.get("q", "").strip()
-    query = Archive.query.filter_by(content_type="blog").order_by(Archive.is_pinned.desc(), Archive.created_at.desc())
-    if category != "ALL":
-        query = query.filter_by(category=category)
-    if search:
-        keyword = f"%{search}%"
-        query = query.filter(or_(Archive.title.ilike(keyword), Archive.summary.ilike(keyword), Archive.content.ilike(keyword), Archive.tags.ilike(keyword)))
-    categories = BLOG_CATEGORIES
-    posts = query.all()
-    featured = next((post for post in posts if post.is_featured or post.thumbnail), posts[0] if posts else None)
-    return render_template("blog/list.html", posts=posts, featured=featured, categories=categories, category=category, search=search)
+@app.route("/life")
+def legacy_life():
+    return redirect(url_for("notes", type="life", **{k: v for k, v in request.args.items() if k != "type"}), 301)
 
-@app.route("/blog/<int:record_id>")
-def blog_detail(record_id):
-    record = Archive.query.filter_by(content_type="blog", id=record_id).first_or_404()
-    record.view_count += 1; db.session.commit()
-    rendered_content = markdown.markdown(record.content or "", extensions=["extra", "fenced_code", "tables"])
-    return render_template("records/detail.html", record=record, rendered_content=rendered_content, back_url=url_for("blog"), back_label="블로그")
 
-def save_record_image(image):
-    if not image or not image.filename:
-        return None
-    original_name = secure_filename(image.filename)
-    extension = original_name.rsplit(".", 1)[-1].lower() if "." in original_name else ""
-    if extension not in ALLOWED_IMAGE_EXTENSIONS:
-        raise ValueError("PNG, JPG, GIF, WEBP 이미지만 업로드할 수 있습니다.")
-    filename = f"{uuid4().hex}.{extension}"
-    image.save(RECORD_UPLOAD_DIR / filename)
-    return f"/static/uploads/records/{filename}"
+@app.route("/life/<key>")
+@app.route("/reading/<key>")
+def legacy_post_key(key):
+    post = by_key(Archive.query, Archive, key) or abort(404)
+    return redirect(post_url(post), 301)
 
-def remove_record_image(image_url):
-    prefix = "/static/uploads/records/"
-    if not image_url or not image_url.startswith(prefix):
-        return
-    image_path = (RECORD_UPLOAD_DIR / Path(image_url).name).resolve()
-    if image_path.parent == RECORD_UPLOAD_DIR.resolve() and image_path.exists():
-        image_path.unlink()
 
-@app.route("/records/new", methods=["GET", "POST"])
-def new_record():
-    content_type = request.args.get("type", "archive").lower()
-    if content_type not in {"archive", "blog"}: content_type = "archive"
-    if request.method == "POST":
-        content_type = request.form.get("content_type", "archive").lower()
-        if content_type not in {"archive", "blog"}: content_type = "archive"
-        allowed_categories = BLOG_CATEGORIES if content_type == "blog" else ARCHIVE_CATEGORIES
-        category = request.form.get("category", allowed_categories[0])
-        if category not in allowed_categories: category = allowed_categories[0]
-        if not request.form.get("title", "").strip() or not request.form.get("content", "").strip():
-            flash("Title과 Content는 필수입니다.", "error")
-            return render_template("records/form.html", record=None, content_type=content_type)
-        try:
-            thumbnail = save_record_image(request.files.get("thumbnail"))
-        except ValueError as error:
-            flash(str(error), "error")
-            return render_template("records/form.html", record=None, content_type=content_type)
-        record = Archive(title=request.form["title"].strip(), category=category, summary=request.form.get("summary"), content=request.form["content"], content_type=content_type, tags=request.form.get("tags"), thumbnail=thumbnail, source_type=request.form.get("source_type"), source_url=request.form.get("source_url"), is_featured="is_featured" in request.form, is_pinned="is_pinned" in request.form)
-        db.session.add(record); db.session.commit(); return redirect(content_detail_url(record))
-    return render_template("records/form.html", record=None, content_type=content_type)
+@app.route("/archive/<int:post_id>")
+@app.route("/blog/<int:post_id>")
+@app.route("/records/<int:post_id>")
+def legacy_post(post_id):
+    post = Archive.query.get_or_404(post_id)
+    return redirect(post_url(post), 301)
 
+
+@app.route("/momoseul")
+def legacy_momoseul():
+    return redirect(url_for("rest"), 301)
+
+
+@app.route("/records/new")
 @app.route("/archive/new")
-def archive_new_redirect():
-    return redirect(url_for("new_record"))
+def legacy_new():
+    return redirect(url_for("admin.write", kind="notes"))
 
-@app.route("/records/<int:record_id>")
-def record_detail(record_id):
-    record = Archive.query.get_or_404(record_id)
-    record.view_count += 1; db.session.commit()
-    rendered_content = markdown.markdown(record.content or "", extensions=["extra", "fenced_code", "tables"])
-    return render_template("records/detail.html", record=record, rendered_content=rendered_content, back_url=url_for("records"), back_label="기록 목록")
 
-@app.post("/records/<int:record_id>/like")
-def like_record(record_id):
-    record = Archive.query.get_or_404(record_id)
-    liked_records = set(session.get("liked_records", []))
-    if record_id in liked_records:
-        record.like_count = max(0, record.like_count - 1); liked_records.remove(record_id)
-    else:
-        record.like_count += 1; liked_records.add(record_id)
-    session["liked_records"] = list(liked_records); db.session.commit()
-    return redirect(request.referrer or url_for("record_detail", record_id=record.id))
+@app.route("/records/<int:post_id>/edit")
+def legacy_edit(post_id):
+    post = Archive.query.get_or_404(post_id)
+    return redirect(url_for("admin.write", kind=post.content_type, id=post.id))
 
-@app.post("/records/<int:record_id>/recommend")
-def recommend_record(record_id):
-    record = Archive.query.get_or_404(record_id)
-    recommended_records = set(session.get("recommended_records", []))
-    if record_id in recommended_records:
-        record.recommendation_count = max(0, record.recommendation_count - 1); recommended_records.remove(record_id)
-    else:
-        record.recommendation_count += 1; recommended_records.add(record_id)
-    session["recommended_records"] = list(recommended_records); db.session.commit()
-    return redirect(request.referrer or url_for("record_detail", record_id=record.id))
 
-@app.post("/records/<int:record_id>/comments")
-def add_comment(record_id):
-    record = Archive.query.get_or_404(record_id)
-    author = request.form.get("author", "Anonymous").strip() or "Anonymous"
-    content = request.form.get("content", "").strip()
-    if content:
-        db.session.add(RecordComment(record_id=record_id, author=author, content=content)); db.session.commit()
-    return redirect(content_detail_url(record) + "#comments")
+@app.errorhandler(404)
+def not_found(error):
+    return render_template("errors.html", code=404, message="찾는 페이지가 없어요."), 404
 
-@app.route("/records/<int:record_id>/edit", methods=["GET", "POST"])
-def edit_record(record_id):
-    record = Archive.query.get_or_404(record_id)
-    if request.method == "POST":
-        for field in ["title", "summary", "content", "tags", "source_type", "source_url"]:
-            setattr(record, field, request.form.get(field))
-        requested_type = request.form.get("content_type", record.content_type).lower()
-        record.content_type = requested_type if requested_type in {"archive", "blog"} else record.content_type
-        allowed_categories = BLOG_CATEGORIES if record.content_type == "blog" else ARCHIVE_CATEGORIES
-        requested_category = request.form.get("category", record.category)
-        record.category = requested_category if requested_category in allowed_categories else allowed_categories[0]
-        try:
-            new_thumbnail = save_record_image(request.files.get("thumbnail"))
-        except ValueError as error:
-            flash(str(error), "error")
-            return render_template("records/form.html", record=record)
-        if "remove_thumbnail" in request.form:
-            remove_record_image(record.thumbnail); record.thumbnail = None
-        if new_thumbnail:
-            remove_record_image(record.thumbnail); record.thumbnail = new_thumbnail
-        record.is_featured = "is_featured" in request.form; record.is_pinned = "is_pinned" in request.form
-        db.session.commit(); return redirect(content_detail_url(record))
-    return render_template("records/form.html", record=record)
 
-@app.post("/records/<int:record_id>/delete")
-def delete_record(record_id):
-    record = Archive.query.get_or_404(record_id)
-    content_type = record.content_type
-    remove_record_image(record.thumbnail)
-    db.session.delete(record); db.session.commit()
-    flash("기록을 삭제했습니다.", "success")
-    return redirect(url_for("blog" if content_type == "blog" else "archive" if content_type == "archive" else "records"))
+@app.errorhandler(400)
+def bad_request(error):
+    return render_template("errors.html", code=400, message="요청을 처리하지 못했어요. 페이지를 새로고침한 뒤 다시 해 볼까요?"), 400
 
-@app.route("/admin/login", methods=["GET", "POST"])
-def admin_login():
-    if request.method == "POST":
-        if request.form.get("password") == "hyarchive": session["admin"] = True; return redirect(url_for("admin"))
-        flash("비밀번호가 올바르지 않습니다.", "error")
-    return render_template("admin/login.html")
 
-@app.before_request
-def protect_admin():
-    if request.path.startswith("/admin") and request.endpoint != "admin_login" and not session.get("admin"): return redirect(url_for("admin_login"))
+# ------------------------------------------------------------------ 명령어
+@app.cli.command("seed")
+def seed_command():
+    """빈 DB일 때만 기본 데이터를 넣는다. 운영 DB에는 아무것도 하지 않는다."""
+    from seed import seed_database
 
-@app.route("/admin")
-def admin(): return render_template("admin/dashboard.html", projects=Project.query.all(), experiences=Experience.query.all(), skills=Skill.query.all(), archives=Archive.query.all())
+    click.echo("기본 데이터를 넣었습니다." if seed_database() else "이미 데이터가 있어 건너뜁니다.")
 
-@app.post("/admin/<string:model>/<int:item_id>/delete")
-def delete_item(model, item_id):
-    mapping = {"projects": Project, "experiences": Experience, "skills": Skill, "archive": Archive}
-    item = mapping.get(model, Archive).query.get_or_404(item_id); db.session.delete(item); db.session.commit(); flash("삭제했습니다.", "success"); return redirect(url_for("admin"))
 
-@app.post("/admin/<string:model>/create")
-def create_item(model):
-    data = request.form
-    if model == "projects": item = Project(title=data.get("title", "Untitled"), subtitle=data.get("subtitle"), description=data.get("description"), tech_stack=data.get("tech_stack"))
-    elif model == "experiences": item = Experience(company=data.get("company", "New"), position=data.get("position"), start_date=data.get("start_date"), end_date=data.get("end_date"), description=data.get("description"), achievement=data.get("achievement"))
-    elif model == "skills": item = Skill(category=data.get("category", "WORK"), name=data.get("name", "New skill"), level=int(data.get("level", 80)))
-    else: item = Archive(title=data.get("title", "New note"), category=data.get("category", "THINKING"), summary=data.get("summary"), content=data.get("content"))
-    db.session.add(item); db.session.commit(); flash("저장했습니다.", "success"); return redirect(url_for("admin"))
+@app.cli.command("notion-sync")
+@click.option("--full", is_flag=True, help="고친 시간과 상관없이 모두 다시 가져온다")
+@click.option("--check", is_flag=True, help="연결과 속성만 확인한다")
+def notion_sync_command(full, check):
+    """노션 독서 DB → 사이트 한 방향 동기화."""
+    import notion_sync
+    from models import SyncLog
 
-@app.route("/admin/<string:model>/<int:item_id>/edit", methods=["GET", "POST"])
-def edit_item(model, item_id):
-    mapping = {"projects": (Project, ["title", "subtitle", "description", "tech_stack"]), "experiences": (Experience, ["company", "position", "start_date", "end_date", "description", "achievement"]), "skills": (Skill, ["category", "name", "level"]), "archive": (Archive, ["title", "category", "summary", "content"])}
-    model_class, fields = mapping.get(model, mapping["archive"]); item = model_class.query.get_or_404(item_id)
-    if request.method == "POST":
-        for field in fields:
-            value = request.form.get(field, "")
-            if field == "level": value = int(value or 0)
-            setattr(item, field, value)
-        db.session.commit(); flash("수정했습니다.", "success"); return redirect(url_for("admin"))
-    return render_template("admin/edit.html", item=item, fields=fields)
+    token, db_value = app.config["NOTION_TOKEN"], app.config["NOTION_READING_DB"]
+    if check:
+        info = notion_sync.inspect(token, db_value)
+        click.echo(f"DB: {info['title']}")
+        for name, kind in info["properties"].items():
+            field = next((f for f, n in info["mapping"].items() if n == name), "—")
+            click.echo(f"  {name} ({kind}) → {field}")
+        return
+    log = SyncLog(source="notion")
+    db.session.add(log)
+    result = notion_sync.sync(token, db_value, full=full)
+    log.status, log.created_count, log.updated_count = "success", result["created"], result["updated"]
+    log.message, log.finished_at = result["message"], datetime.utcnow()
+    db.session.commit()
+    click.echo(f"신규 {result['created']} · 갱신 {result['updated']} · 그대로 {result['unchanged']} · 보류 제외 {result['held']} · 표지 {result['covers']}")
+    click.echo(result["message"])
 
-if __name__ == "__main__": app.run(debug=True)
+
+@app.cli.command("hash-password")
+@click.option("--password", prompt="새 관리자 비밀번호", hide_input=True, confirmation_prompt=True)
+def hash_password_command(password):
+    """ADMIN_PASSWORD_HASH 값을 만든다."""
+    click.echo(generate_password_hash(password))
+
+
+if __name__ == "__main__":
+    app.run(debug=True)

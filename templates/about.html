@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% from '_components.html' import icon, chip, status_badge, avatar, body as render_body %}
+{% block title %}{{ profile.name if profile else '최혜영' }} — 소개 · 이력서 | HY ARCHIVE{% endblock %}
+{% block description %}{{ profile.get('summary')|plain if profile else '' }}{% endblock %}
+{% block body_class %}page-resume{% endblock %}
+{% block content %}
+{% set strengths = profile.get('strengths', []) if profile else [] %}
+{% set strengths = strengths or [
+  {'title': '업무 구조화', 'text': '흩어진 업무를 기준과 순서가 있는 흐름으로 정리해요.'},
+  {'title': '데이터 검증', 'text': '데이터 관계와 예외부터 점검해 결과가 흔들리지 않게 해요.'},
+  {'title': '서비스 기획', 'text': '문제 정의부터 구현·발표까지 한 흐름으로 이어요.'},
+  {'title': '문서화', 'text': '실험과 결정을 남겨 팀이 다시 쓸 수 있게 해요.'}] %}
+<article class="resume">
+  <header class="resume-head">
+    {{ avatar(profile, 'lg') }}
+    <div class="resume-who">
+      <h1>{{ profile.name if profile else '최혜영' }}</h1>
+      <p>{{ profile.get('tagline') if profile else '' }}</p>
+      {% if not profile or (profile.extra or {}).get('seeking', true) %}{{ status_badge('새로운 일을 찾고 있어요') }}{% endif %}
+    </div>
+    <div class="resume-actions">
+      {% if profile and profile.resume_url %}<a class="btn btn-primary" href="{{ profile.resume_url }}" target="_blank" rel="noopener">{{ icon('download', 15) }}PDF 받기</a>
+      {% else %}<button class="btn btn-primary" type="button" data-print>{{ icon('download', 15) }}PDF로 저장</button>{% endif %}
+      {% if profile and profile.email %}<a class="btn btn-sub" href="mailto:{{ profile.email }}">{{ profile.email }}</a>{% endif %}
+      {% if profile and (profile.github or '').startswith('http') %}<a class="btn btn-sub" href="{{ profile.github }}" target="_blank" rel="noopener">GitHub</a>{% endif %}
+      {% if is_admin %}<a class="edit-link" href="{{ url_for('admin.write', kind='about') }}">{{ icon('pen', 14) }}수정</a>{% endif %}
+    </div>
+  </header>
+
+  {% if profile and profile.get('summary') %}
+  <section class="resume-sec" aria-labelledby="r-summary">
+    <h2 class="r-label" id="r-summary">한 줄 소개</h2>
+    <p class="resume-summary">{{ profile.get('summary')|hl }}</p>
+  </section>
+  {% endif %}
+
+  <section class="resume-sec" aria-labelledby="r-strength">
+    <h2 class="r-title" id="r-strength">잘하는 것</h2>
+    <div class="grid-4">
+      {% for s in strengths %}
+      <div class="strength tint-{{ ['butter', 'mint', 'sky', 'pink'][loop.index0 % 4] }}"><h3>{{ s.title }}</h3><p>{{ s.text }}</p></div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {% if body %}<section class="resume-sec resume-body">{{ render_body(body) }}</section>{% endif %}
+
+  {% for title, rows, sid in [('경력', work, 'r-work'), ('교육', education, 'r-edu')] if rows %}
+  <section class="resume-sec" aria-labelledby="{{ sid }}">
+    <h2 class="r-title" id="{{ sid }}">{{ title }}</h2>
+    <ol class="resume-list">
+      {% for e in rows %}
+      <li>
+        <span class="mono r-when">{{ e.period }}</span>
+        <div>
+          <h3>{{ e.company }}{% if e.position %} {{ chip(e.position.split(' · ')[0], 'pink' if e.kind == 'edu' else ['mint', 'butter', 'sky'][loop.index0 % 3]) }}{% endif %}</h3>
+          {% if e.position and ' · ' in e.position %}<p class="r-sub">{{ e.position.split(' · ', 1)[1] }}</p>{% endif %}
+          {% if e.description %}<p>{{ e.description|nl2br }}</p>{% endif %}
+          {% if e.achievement %}<p class="r-sub">{{ e.achievement|nl2br }}</p>{% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ol>
+  </section>
+  {% endfor %}
+
+  {% if projects %}
+  <section class="resume-sec" aria-labelledby="r-project">
+    <div class="section-head small"><h2 class="r-title" id="r-project">프로젝트</h2><a class="text-btn no-print" href="{{ url_for('projects') }}">자세히 보기 <i class="arrow" aria-hidden="true">→</i></a></div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th scope="col">프로젝트</th><th scope="col">내 역할</th><th scope="col">기술</th></tr></thead>
+        <tbody>
+          {% for p in projects %}
+          <tr><th scope="row"><a href="{{ project_url(p) }}">{{ p.title }}</a></th><td>{{ p.role or '' }}</td><td class="mono">{{ p.tech_list[:3]|join(' · ') }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if skills %}
+  <section class="resume-sec" aria-labelledby="r-skill">
+    <h2 class="r-title" id="r-skill">기술</h2>
+    <p class="chip-wrap">{% for group, items in skills %}{% for s in items %}{{ chip(s.name, tint(group, 'butter' if group == 'WORK' else 'sky')) }}{% endfor %}{% endfor %}</p>
+  </section>
+  {% endif %}
+
+  {% if showcases %}
+  <section class="resume-sec" aria-labelledby="r-etc">
+    <h2 class="r-title" id="r-etc">기타 활동</h2>
+    <ul class="etc-list">
+      {% for s in showcases %}
+      <li><a href="{{ url_for(s.slug) }}">{{ chip(s.status_label, 'mint' if s.is_live else 'lilac') }}<strong>{{ s.title }}</strong><span>{{ '운영' if s.slug == 'rest' else '공동 기획·진행' }} · {{ s.get('summary') or s.get('label') }}</span></a></li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+</article>
+{% endblock %}

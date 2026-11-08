@@ -1,2 +1,15 @@
-{% extends 'base.html' %}{% block title %}Projects — HY ARCHIVE{% endblock %}{% block content %}<main class="page"><p class="eyebrow">PORTFOLIO / PROJECTS</p><h1 class="page-title">Selected<br><em>Projects.</em></h1><div class="project-grid">{% for project in projects %}<a class="project-card" href="{{ url_for('project_detail', project_id=project.id) }}"><div class="project-art art-{{ loop.index }}"><span>PROJECT 0{{ loop.index }}</span><strong>{{ 'MC' if loop.index == 1 else 'CD' }}</strong></div><p class="eyebrow">{{ project.tech_stack }}</p><h3>{{ project.title }}</h3><p>{{ project.subtitle }}</p><span class="text-link">VIEW CASE ↗</span></a>{% endfor %}</div></main>{% endblock %}
-
+{% extends 'base.html' %}
+{% from '_components.html' import section_label, project_row, empty_state %}
+{% block title %}프로젝트 — HY ARCHIVE{% endblock %}
+{% block description %}어떤 불편을 발견했고, 어떻게 구조를 세웠고, 무엇이 달라졌는지 프로젝트마다 정리했어요.{% endblock %}
+{% block content %}
+<header class="wrap page-head">
+  {{ section_label('프로젝트', 'folder', 'sky') }}
+  <h1>문제에서 시작한 작업들</h1>
+  <p class="lead">어떤 불편을 발견했고, 어떻게 구조를 세웠고, 무엇이 달라졌는지를 프로젝트마다 정리했어요.</p>
+</header>
+<div class="wrap stack">
+  {% for project in projects %}{{ project_row(project, loop.index) }}
+  {% else %}{{ empty_state('프로젝트를 정리하고 있어요. 곧 채워질 거예요.', url_for('home'), '홈으로') }}{% endfor %}
+</div>
+{% endblock %}

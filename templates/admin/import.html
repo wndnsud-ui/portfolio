@@ -1,0 +1,55 @@
+{% extends 'admin/_layout.html' %}
+{% block title %}노션 가져오기{% endblock %}
+{% block content %}
+<main class="admin-main">
+  <header class="admin-head"><div><h1>노션 가져오기</h1><p>노션 독서 기록을 사이트로 옮겨요. 노션 → 사이트 한 방향이에요.</p></div></header>
+  <div class="import-grid">
+    <section class="panel-card">
+      <h2 class="h-small">파일로 가져오기</h2>
+      <p class="muted">노션 독서 DB를 JSON 또는 CSV로 내보낸 파일을 올리면 책과 노트를 넣어요. 같은 노션 페이지는 새로 만들지 않고 고쳐 넣어요. 지금 책장에는 {{ books }}권이 있어요.</p>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="import-file">파일 (.json, .csv)</label>
+        <input class="input" id="import-file" type="file" name="file" accept=".json,.csv" required>
+        <button class="btn btn-primary" type="submit">가져오기</button>
+      </form>
+    </section>
+    <section class="panel-card">
+      <h2 class="h-small">노션에서 바로 가져오기</h2>
+      {% if notion_ready %}
+      <p class="muted">노션 「도서 기록」 표의 책 정보(제목·저자·장르·상태·기간)를 책장으로 가져와요. 「보류」인 책은 빼고, 노션에서 고친 책만 다시 가져와요. 표지가 없으면 카카오 책 검색으로 채워요. 챕터·발제문 노트는 아직 가져오지 않아요.{% if last_sync %} 마지막으로 가져온 때: {{ last_sync.started_at|date('%Y.%m.%d %H:%M') }}.{% endif %}</p>
+      <form method="post" action="{{ url_for('admin.notion_import') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="check"><input type="checkbox" name="full" value="1"> 고친 적 없는 책도 모두 다시 가져오기</label>
+        <button class="btn btn-primary" type="submit" data-loading="가져오는 중…">지금 가져오기</button>
+      </form>
+      {% else %}
+      <p class="muted">노션 키와 독서 DB 주소를 넣으면 이 자리에 「지금 가져오기」 버튼이 생겨요.</p>
+      <ol class="muted steps-list">
+        <li>notion.so/profile/integrations에서 내부 통합을 만들고 시크릿을 복사해요.</li>
+        <li>독서 DB 오른쪽 위 ··· › 연결에서 그 통합을 추가해요.</li>
+        <li><code>NOTION_TOKEN</code>(시크릿)과 <code>NOTION_READING_DB</code>(DB 주소)를 env.txt와 Railway 변수에 넣어요.</li>
+      </ol>
+      <button class="btn btn-sub" type="button" disabled>지금 가져오기</button>
+      {% endif %}
+    </section>
+  </div>
+  <h2 class="h-small group-title">실행 기록</h2>
+  <div class="table-wrap">
+    <table class="table admin-table">
+      <thead><tr><th scope="col">시작</th><th scope="col">방식</th><th scope="col">결과</th><th scope="col">신규 / 갱신</th><th scope="col">메모</th></tr></thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td>{{ log.started_at|date('%Y.%m.%d %H:%M') }}</td>
+          <td data-label="방식">{{ '파일' if log.source == 'file' else '노션' }}</td>
+          <td data-label="결과"><span class="state {{ 'is-live' if log.status == 'success' else 'is-draft' }}">{{ '성공' if log.status == 'success' else log.status }}</span></td>
+          <td data-label="신규 / 갱신">{{ log.created_count or 0 }} / {{ log.updated_count or 0 }}</td>
+          <td data-label="메모">{{ log.message or '' }}</td>
+        </tr>
+        {% else %}<tr><td colspan="5" class="empty-cell">아직 실행 기록이 없어요.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</main>
+{% endblock %}

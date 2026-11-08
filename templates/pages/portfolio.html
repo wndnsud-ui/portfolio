@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}최혜영 · IT 서비스 기획 — HY ARCHIVE{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/portfolio.css') }}">{% endblock %}
+{% macro heading(number, name, title, description='') %}<header class="pf-heading"><p class="pf-label">{{ number }} / {{ name }}</p><h2>{{ title }}</h2>{% if description %}<p>{{ description }}</p>{% endif %}</header>{% endmacro %}
+{% macro row(number, title, text) %}<div class="pf-row"><span>{{ number }}</span><h3>{{ title }}</h3><p>{{ text }}</p></div>{% endmacro %}
+{% macro missing(text) %}<aside class="pf-missing"><span class="pf-label">화면 자료 준비 중</span><p>{{ text }}</p><small>실제 프로젝트 원본 스크린샷을 확인한 뒤 추가할 예정입니다.</small></aside>{% endmacro %}
+{% macro links(title) %}{% for project in projects if project.title == title %}<div class="pf-links">{% if project.demo_url %}<a href="{{ project.demo_url }}" target="_blank" rel="noopener noreferrer">{{ title }} 데모 ↗</a>{% endif %}{% if project.github_url and project.github_url != '#' %}<a href="{{ project.github_url }}" target="_blank" rel="noopener noreferrer">GitHub ↗</a>{% endif %}<a href="{{ project_url(project) }}">프로젝트 상세 →</a></div>{% endfor %}{% endmacro %}
+{% block content %}
+<div class="portfolio-page" id="portfolio">
+<div class="pf-container">
+<section class="pf-intro" aria-labelledby="pf-title">
+<p class="pf-label">01 / PORTFOLIO · 최혜영 · IT 서비스 기획</p>
+<h1 id="pf-title">사용자의 경험을 정의하고,<br>서비스가 작동하는<br><span>기준까지 설계합니다.</span></h1>
+<p class="pf-intro-copy">업무의 기준을 만들던 실무에서,<br>경험과 기술을 연결하는 서비스 기획으로.</p>
+<nav class="pf-index" aria-label="프로젝트 바로가기">
+<a href="#bookshop"><span>01</span><strong>모모슬의 느린책방</strong><small>느린 독서 경험</small><b aria-hidden="true">↘</b></a>
+<a href="#mood-code"><span>02</span><strong>Mood Code</strong><small>감정과 공간의 연결</small><b aria-hidden="true">↘</b></a>
+<a href="#calodetect"><span>03</span><strong>CaloDetect</strong><small>인식 이후의 식단 기록</small><b aria-hidden="true">↘</b></a>
+</nav>
+</section>
+<section class="pf-section" id="experience" aria-labelledby="experience-heading">
+{{ heading('02', 'EXPERIENCE', '업무를 움직이는 기준을 만들었습니다.') }}
+<p class="pf-lead" id="experience-heading">감정평가업계 약 20년의 실무에서 업무의 범위·진행·검토 기준을 문서로 만들었습니다.</p>
+{{ row('01', '실무 책자·보고서', '담보평가로 범위를 좁히고 T.A.P 보고서 초안을 수정·통합해 제본 전달') }}
+{{ row('02', '작성팀 운영 설계', '배정부터 발송까지 단계·담당·상태·진행 보고 양식을 노션에 정리') }}
+{{ row('03', '오류와 품질 기준', '재전송 사유와 AI 검토 절차를 기록해 확인 지점을 팀에 공유') }}
+<div class="pf-training"><span class="pf-label">다음 경험으로의 연결</span><h3>기업맞춤형 AI+X 융복합 인재 양성 과정</h3><p>2026.06.05~11.04 <span>824시간 / 103일</span><span>수행 프로젝트 · CaloDetect</span></p></div>
+</section>
+<section class="pf-section" id="bookshop">
+{{ heading('03', '모모슬의 느린책방', '어떻게 천천히 책을 즐기게 할까?', '목적지를 빠르게 찾기 전에, 책방의 분위기와 이야기를 먼저 만나는 경험.') }}
+<div class="pf-split"><div><p class="pf-label">기획 질문 → 설계 판단</p><h3>검색에 앞서,<br>둘러볼 이유를 만듭니다.</h3><p>책방의 분위기를 느끼며 둘러보고, 추천 이야기와 도서를 발견한 뒤 실제 책 정보를 확인하도록 순서를 설계했습니다.</p><p class="pf-note">본인 역할 · 독서 경험 기획, 콘텐츠 순서 설계, 도서 API 구현</p></div>{{ missing('책방 로고·탐색·검색·추천 영역을 보여주는 실제 메인 화면') }}</div>
+<ol class="pf-flow" aria-label="책방 이용 흐름"><li>책방 분위기 둘러보기</li><li>추천 이야기·도서 발견</li><li>검색 또는 ISBN으로 확인</li></ol>
+<div class="pf-split"><div><p class="pf-label">콘텐츠와 데이터 연결</p><h3>발견한 책을 실제 정보로 연결합니다.</h3><p>추천 콘텐츠에서 생긴 관심이 검색 또는 ISBN을 통한 도서 API 조회로 이어집니다. 책의 분위기를 소개하는 콘텐츠와 실제 도서 정보를 확인하는 경로를 연결했습니다.</p></div>{{ missing('추천 콘텐츠와 도서 API 조회 결과를 보여주는 실제 화면') }}</div>
+<p class="pf-note">확인된 구현 · 도서 API 연결. 개인화 추천 알고리즘이나 독서 행동 개선 효과는 주장하지 않습니다.</p>
+{{ links('모모슬의 느린책방') }}
+</section>
+<section class="pf-section" id="mood-code">
+{{ heading('04', 'MOOD CODE', '공간의 감각에서 상품으로.', '상품 하나가 아니라, 함께 놓였을 때의 공간을 선택하도록.') }}
+<div class="pf-decisions"><div><p class="pf-label">문제</p><p>사용자는 서로 어울리는 상품을 직접 비교해야 했습니다.</p></div><div><p class="pf-label">기획 판단</p><p>원하는 감각을 선택하면 공간 장면을 보고 관련 상품으로 이동.</p></div></div>
+<figure class="pf-evidence"><img src="{{ url_for('static', filename='images/moodcode.png') }}" width="1895" height="762" loading="lazy" alt="Mood Code 실제 메인 화면. 네 무드 메뉴와 공간에 무드를 더하다 문구, 디퓨저 공간 장면이 표시되어 있다."><figcaption>실제 결과물 · Mood Code 메인. 저장소의 디퓨저 장면 원본을 사용했습니다. 무드 메뉴와 카피를 원본 비율로 확인할 수 있습니다.</figcaption></figure>
+<h3 class="pf-subtitle">감각을 연결 가능한 기준으로</h3>
+{{ row('01', '네 무드', 'BLOOM · CLEAR · CALM · CHIC') }}
+{{ row('02', '네 공간', '거실 · 다이닝 · 침실 · 발코니') }}
+{{ row('03', '장면과 상품의 연결', 'Scene Code ↔ Product Code · 16개 공간 장면의 기획 범위') }}
+<div class="pf-subsection"><p class="pf-label">팀장으로서의 조율</p><h3>이미지·상품 코드·DB가 어긋났을 때</h3><p>팀 산출물을 같은 기준으로 대조할 수 있도록 정리했습니다.</p>
+{{ row('01', '공통 기준 정리', '공통 컬럼과 분류값을 정리해 공간 이미지·상품·DB 정보의 기준을 맞춤') }}
+{{ row('02', '매핑 대조·통합 검수', 'Scene–Product 매핑을 대조하고 팀 산출물을 통합 검수') }}
+<p class="pf-note">본인 기여 · 서비스 기획, 데이터 연결 기준 정리와 팀 산출물 조율. 팀 전체의 구현을 단독 성과로 표시하지 않습니다.<br>회고 · 파일 담당자와 완료 기준을 작업 시작 시 명시해야 합니다. 사용자 선택 개선 효과는 측정하지 않았습니다.</p></div>
+{{ links('Mood Code') }}
+</section>
+<section class="pf-section" id="calodetect">
+{{ heading('05', 'CALODETECT', '한 끼 분석을 다음 선택까지.', '인식 결과를 확인하고, 기록을 쌓고, 다음 식사를 고르는 흐름으로.') }}
+<div class="pf-decisions"><div><p class="pf-label">출발점</p><p>사진을 분석하면 그 한 끼의 결과는 알 수 있습니다.</p></div><div><p class="pf-label">다시 정의한 문제</p><p>식사를 계속 기록해야 오늘의 상태를 보고 다음 메뉴를 고를 수 있습니다.</p></div></div>
+<ol class="pf-flow" aria-label="식단 기록 서비스 흐름"><li>사진 분석</li><li>후보 확인·수정</li><li>식단 기록</li><li>오늘 상태</li><li>다음 메뉴 추천</li></ol>
+{{ missing('CaloDetect 첫 화면 — 사진 분석에서 식단 기록으로 이어지는 실제 결과물') }}
+<div class="pf-split pf-subsection"><div><p class="pf-label">예외 경로 설계</p><h3>인식되지 않아도<br>기록은 이어지도록.</h3><p>사진 촬영·선택, 음식 검색, 직접 입력으로 진입합니다. 인식이 틀리면 후보를 수정하고, 모르는 음식은 직접 추가합니다.</p><p class="pf-note">개선 항목 · 미인식 음식 입력, 고화소 사진 업로드, 첫 사용 안내</p></div>{{ missing('식단 기록 화면 — 음식 후보 수정과 음식명·섭취량 확인 구간') }}</div>
+<h3 class="pf-subtitle">AI가 제안하고, 사용자가 확인합니다.</h3>
+{{ row('01', 'YOLO 인식', 'AI는 음식 인식 후보를 제시') }}
+{{ row('02', '사용자의 최종 확인', '음식명과 섭취량을 확인·수정한 뒤 확정') }}
+{{ row('03', '영양 데이터 기준 계산', '확인한 음식과 섭취량을 영양 데이터에 연결해 기록과 다음 선택에 활용') }}
+<p class="pf-note">생성형 AI의 임의 영양값을 확정 수치로 사용하지 않습니다.</p>
+<div class="pf-subsection"><p class="pf-label">모델 시험</p><h3>150개 음식 클래스의 검증 데이터로 비교했습니다.</h3>
+<div class="pf-table-wrap" role="region" aria-label="모델 비교 표, 가로 스크롤 가능" tabindex="0"><table><caption>검증 데이터 기준 모델 성능 · 실제 사용자 인식 성공률과 다릅니다.</caption><thead><tr><th scope="col">모델</th><th scope="col">mAP@0.5</th><th scope="col">Recall</th><th scope="col">적용 방향</th></tr></thead><tbody><tr><th scope="row">YOLO26m</th><td>0.750</td><td>0.712</td><td>PC</td></tr><tr><th scope="row">YOLO26s</th><td>0.737</td><td>0.689</td><td>모바일</td></tr></tbody></table></div></div>
+<div class="pf-subsection"><p class="pf-label">본인 기여와 검증</p>
+{{ row('01', '기획·기능 통합', '2.0 기획안·구현 지시서 작성, 웹앱 기능 통합과 챗봇·리워드 구현') }}
+{{ row('02', '시험·배포 점검', '모델 비교·오류 점검, 공유 DB 전환·배포 진행') }}
+<p class="pf-note">확인 범위 · 모델 시험과 구현·오류 점검. 유지율과 기록 시간 단축은 측정 전입니다. 배포 링크의 접속 여부와 개별 기능의 작동 여부는 별도 확인이 필요합니다.</p></div>
+{{ links('CaloDetect') }}
+</section>
+<section class="pf-section pf-synthesis" id="synthesis">
+{{ heading('06', 'SYNTHESIS', '세 프로젝트에서 반복한 일.') }}
+{{ row('01', '경험 정의', '천천히 책을 즐기기, 원하는 공간 고르기, 식사를 지속해서 기록하기') }}
+{{ row('02', '기준 설계', '콘텐츠 순서, 공간·상품 코드, AI 결과의 확인·수정 규칙') }}
+{{ row('03', '실행과 검증', '도서 API 구현, 팀 산출물 통합, 모델 시험과 배포 후 점검') }}
+<p class="pf-closing">실무 책자·작성팀 노션에서 다룬<br><strong>범위·흐름·검토 기준</strong>을 서비스 설계에 연결했습니다.</p>
+<a class="pf-back" href="#portfolio">처음으로 ↑</a>
+</section>
+</div></div>
+{% endblock %}

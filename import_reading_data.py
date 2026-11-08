@@ -1,4 +1,6 @@
-"""Import a Notion-exported JSON or CSV file into the local SQLite database.
+"""노션에서 내보낸 JSON·CSV 독서 기록을 DB(로컬 SQLite 또는 Supabase)에 넣는다.
+
+관리자 화면 /admin/import 에서도 같은 함수(import_books)를 쓴다.
 
 Examples:
     python import_reading_data.py reading_books.json
@@ -12,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from app import app
+import io
 from models import db, Book, ReadingNote
 
 BOOK_FIELDS = ["title", "author", "publisher", "genre", "record_type", "start_date", "finish_date", "status", "cover_image", "rating", "summary", "notion_url", "notion_page_id"]
@@ -25,6 +27,19 @@ def read_export(path):
     if path.suffix.lower() == ".csv":
         with path.open("r", encoding="utf-8-sig", newline="") as file:
             return list(csv.DictReader(file))
+    raise ValueError("지원 형식은 .json 또는 .csv입니다.")
+
+def parse_upload(upload):
+    """관리자 화면에서 올린 파일(FileStorage)을 레코드 목록으로 바꾼다."""
+    if not upload or not upload.filename:
+        raise ValueError("파일을 선택해 주세요.")
+    suffix = Path(upload.filename).suffix.lower()
+    text = upload.read().decode("utf-8-sig")
+    if suffix == ".json":
+        payload = json.loads(text)
+        return payload.get("books", payload) if isinstance(payload, dict) else payload
+    if suffix == ".csv":
+        return list(csv.DictReader(io.StringIO(text)))
     raise ValueError("지원 형식은 .json 또는 .csv입니다.")
 
 def clean(value):
@@ -85,8 +100,9 @@ def main():
     if not path.exists():
         print(f"파일을 찾을 수 없습니다: {path}")
         return 1
+    from app import app
+
     with app.app_context():
-        db.create_all()
         result = import_books(read_export(path))
     print(f"Import 완료 — 신규 도서 {result[0]}개, 갱신 {result[1]}개, 노트 {result[2]}개, 건너뜀 {result[3]}개")
     return 0
