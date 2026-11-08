@@ -457,6 +457,9 @@ textarea.input { resize: vertical; line-height: 1.6; }
 .resume-body .post-body { font-size: 16px; }
 
 /* ------------------------------------------------------------ 운영 중인 곳 (휴식도감 · 모두의 소파) */
+.show-banner { margin-top: 40px; overflow: hidden; border-radius: var(--r-big); }
+.show-banner img { display: block; width: 100%; height: auto; }
+.show-banner + .show-hero { margin-top: 24px; }
 .show-hero { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 32px; align-items: center; margin-top: 40px; padding: 44px; border-radius: var(--r-big); background: var(--t-bg); }
 .show-label { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--t-ink); font-size: var(--fs-label); font-weight: 700; }
 .show-hero h1 { margin: 16px 0 14px; font-size: var(--fs-page); font-weight: 900; line-height: 1.2; }

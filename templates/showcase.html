@@ -5,6 +5,13 @@
 {% block content %}
 {% set rest = item.slug == 'rest' %}
 <section class="wrap">
+  <div class="show-banner">
+    {% if rest %}
+    <img src="{{ url_for('static', filename='images/momosul-banner.jpg') }}" width="2048" height="339" alt="휴식도감 — 필요할 때 꺼내어 쓰는 휴식수집목록" fetchpriority="high">
+    {% else %}
+    <img src="{{ url_for('static', filename='images/sofa-banner.jpg') }}" width="2048" height="339" alt="모두의 소파 — 안부 묻고, 사주 듣고, 사람 사는 이야기를 나누는 곳" fetchpriority="high">
+    {% endif %}
+  </div>
   <div class="show-hero tint-{{ item.tint }}">
     <div class="show-copy">
       <p class="show-label">
