@@ -39,7 +39,11 @@
         {% for endpoint, label, active in nav_items %}
         <a href="{{ url_for(endpoint) }}"{% if active %} aria-current="page"{% endif %}>{{ label }}</a>
         {% endfor %}
-        {% if is_admin %}<a class="nav-admin" href="{{ url_for('admin.dashboard') }}">관리</a>{% endif %}
+        {% if is_admin %}
+        <a class="nav-admin" href="{{ url_for('admin.dashboard') }}">관리</a>
+        {% else %}
+        <a class="nav-admin" href="{{ url_for('admin.login') }}">관리자 로그인</a>
+        {% endif %}
       </nav>
       <div class="header-actions">
         <a class="icon-link" href="{{ url_for('search') }}" aria-label="검색">{{ icon('search', 18) }}</a>
@@ -65,7 +69,7 @@
       </div>
       <div class="footer-bottom">
         <small>© {{ now.year }} {{ profile.name if profile else '최혜영' }} · HY ARCHIVE</small>
-        <a href="{{ url_for('admin.dashboard') }}">관리</a>
+        <a href="{{ url_for('admin.dashboard') if is_admin else url_for('admin.login') }}">{{ '관리' if is_admin else '관리자 로그인' }}</a>
       </div>
     </div>
   </footer>
