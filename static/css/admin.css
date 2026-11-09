@@ -373,3 +373,9 @@ legend.opt-title + * { clear: both; }
 .notion-list label:hover { background: var(--bg); }
 .notion-list input { width: 18px; height: 18px; flex: none; accent-color: var(--ink); }
 .notion-foot { position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 14px; padding-top: 12px; background: var(--card); }
+
+/* ChatGPT 연결 설정 */
+.chatgpt-setup { display: grid; gap: 20px; margin-bottom: 24px; min-width: 0; }
+.chatgpt-setup label { display: grid; gap: 8px; min-width: 0; font-weight: 700; }
+.chatgpt-setup textarea { resize: vertical; line-height: 1.7; }
+.chatgpt-setup .notice { min-width: 0; overflow-wrap: anywhere; }

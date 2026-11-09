@@ -147,3 +147,31 @@ gpg -d hy-archive-YYYYMMDD.sql.gz.gpg | gunzip | psql "빈_DB_주소"
 - DB 페이지 1개 = 책 1권. 제목·저자·출판사·장르·상태·시작일·완독일(또는 기간)·별점·한줄평·표지 속성을 이름으로 찾는다.
 - 페이지 본문은 독서 노트로 옮긴다. 새 노트는 임시저장으로 들어오므로 확인 후 발행한다.
 - 노션에서 고친 시간이 같으면 건너뛴다. 노션 파일(표지·본문 이미지)은 Storage `notion/`에 다시 올린다.
+
+## ChatGPT 웹에서 독서 초안 저장
+
+관리자 `/admin/chatgpt`에서 연결 키를 발급하고, ChatGPT 웹의 비공개 전용 GPT Actions에 연결한다.
+기존 관리자 비밀번호·노션 키·Supabase 키를 GPT에 넣지 않는다. 서버는 OpenAI API를 호출하지 않으며,
+정리는 ChatGPT 대화에서 수행하고 홈페이지에는 비공개 독서 초안만 저장한다.
+
+1. 관리자 → **ChatGPT 연결** → 연결 키 발급. 원문 키는 발급 응답에서 한 번만 보이며 DB에는 SHA-256 해시만 저장한다.
+2. 전용 GPT의 지침에 같은 화면의 지침을 붙인다 (`integrations/chatgpt-instructions.md`).
+3. Actions 스키마를 `https://배포주소/api/chatgpt/openapi.json`에서 가져온다.
+4. 인증을 API Key / Bearer로 설정하고 발급한 홈페이지 연결 키를 입력한다. GPT 공유 범위는 본인만으로 둔다.
+5. `책 제목 기록을 찾아서 정리하고 홈페이지에 초안으로 저장해 줘`라고 요청한다.
+
+- 관리자 **노션 가져오기**에서 책을 먼저 가져온다. `NOTION_TOKEN`이 있으면 해당 책의 실제 노션 본문/하위 페이지를 읽는다.
+  없으면 이미 가져온 원문만 사용하고 `source_mode=imported_copy`를 반환한다.
+- 초안 API는 전용 Bearer 키만 허용한다. 관리자 세션 쿠키로 호출할 수 없으며, CSRF 예외는 `/api/chatgpt` 블루프린트에만 적용한다.
+  키 발급·폐기 관리자 폼의 CSRF 보호는 유지한다.
+- 원문·사진 목록을 서명한 `source_token`은 1시간 유효하다. 원문에서 선택한 사진만 복사하며 임의 URL 다운로드는 받지 않는다.
+- 사진 자동 복사는 알려진 노션 파일 호스트·Unsplash와 기존 사이트 이미지에 한정한다. 외부 사진은 직접 업로드한다.
+  서버는 선택된 이미지만 Supabase Storage로 복사한다. 리디렉션 다운로드는 허용하지 않으며 이미지당 최대 6MB이다.
+- 같은 책/원문에 대한 재전송은 기존 초안을 확인한다. 기존 글 수정에는 최신 revision이 필요하고, 이미 공개했거나 예약한 글은 수정하지 않는다.
+- 공개·삭제 API는 없다. 최종 공개는 홈페이지 관리자에서 한다. 원본 노션과 기존 노션 가져오기 글은 변경하지 않는다.
+- GPT 생성·Actions 사용 가능 여부는 사용 중인 계정에서 확인해야 한다. 일반 ChatGPT 대화나 이 Codex 대화에 자동 연결되지는 않는다.
+- 연결 해시는 기존 `Profile.extra`의 `chatgpt_connection` 키에 저장한다. 소개 페이지를 수정해도 해당 키를 보존한다.
+  새로운 테이블이나 DB 마이그레이션은 필요 없다.
+- 회귀 검사: `python -m unittest discover -s tests -v` (격리 SQLite와 모의 Notion/Storage 사용, 실제 비밀값 미사용).
+
+공식 설정 안내: https://developers.openai.com/api/docs/actions/getting-started

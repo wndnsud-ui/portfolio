@@ -32,6 +32,12 @@ from admin import admin_bp  # noqa: E402  (admin이 app의 헬퍼를 쓰므로 �
 
 app.register_blueprint(admin_bp)
 
+from chatgpt_bridge import api as chatgpt_api  # noqa: E402
+
+# These endpoints accept a dedicated Bearer key, not browser cookies.
+csrf.exempt(chatgpt_api)
+app.register_blueprint(chatgpt_api)
+
 PAGE_SIZE = 12
 COMMENT_LIMIT = 500
 

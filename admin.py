@@ -313,6 +313,7 @@ def apply_about(profile, data):
                       "note": clean_text(s.get("note"), 80)}
                      for s in (about.get("stats") or [])[:4] if isinstance(s, dict) and clean_text(s.get("value"), 20)]
     profile.extra = {
+        **dict(profile.extra or {}),
         "tagline": clean_text(about.get("tagline"), 120), "home_lead": clean_text(about.get("home_lead"), 400),
         "summary": clean_text(about.get("summary"), 600), "seeking": bool(about.get("seeking")),
         "strengths": [{"title": clean_text(x.get("title"), 40), "text": clean_text(x.get("text"), 160)}
@@ -352,6 +353,16 @@ def apply_about(profile, data):
         if skill.id not in keep:
             db.session.delete(skill)
     return profile
+
+
+@admin_bp.route("/chatgpt", methods=["GET", "POST"])
+@admin_required
+def chatgpt():
+    from chatgpt_bridge import manage
+    response = current_app.make_response(manage())
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
 
 
 def apply_payload(kind, item, data, action):

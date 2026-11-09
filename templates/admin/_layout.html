@@ -28,6 +28,7 @@
         <a href="{{ url_for('admin.showcases') }}"{% if ep == 'admin.showcases' %} aria-current="page"{% endif %}>{{ icon('tv', 17) }}<span>운영 중인 곳</span></a>
         <a href="{{ url_for('admin.comments') }}"{% if ep == 'admin.comments' %} aria-current="page"{% endif %}>{{ icon('chat', 17) }}<span>댓글</span></a>
         <a href="{{ url_for('admin.importer') }}"{% if ep == 'admin.importer' %} aria-current="page"{% endif %}>{{ icon('sync', 17) }}<span>노션 가져오기</span></a>
+        <a href="{{ url_for('admin.chatgpt') }}"{% if ep == 'admin.chatgpt' %} aria-current="page"{% endif %}>{{ icon('chat', 17) }}<span>ChatGPT 연결</span></a>
       </nav>
       <div class="side-foot">
         <span>{{ profile.name if profile else '관리자' }} 님</span>
