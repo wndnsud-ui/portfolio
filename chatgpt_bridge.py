@@ -70,7 +70,8 @@ def manage():
             raise BridgeError('알 수 없는 요청입니다.')
         profile.extra = extra
         db.session.commit()
-    return render_template('admin/chatgpt.html', raw_key=raw_key,
+    from mcp_auth import connection_count, resource
+    return render_template('admin/chatgpt.html', raw_key=raw_key, mcp_url=resource(), mcp_connections=connection_count(),
                            connection=key_info(profile), notion_ready=bool(current_app.config.get('NOTION_TOKEN')),
                            book_count=Book.query.count(),
                            instructions=Path(current_app.root_path, 'integrations/chatgpt-instructions.md').read_text())
@@ -263,22 +264,30 @@ def source_data(book, page_id=None):
 @api.get('/books')
 @require_key
 def books():
+    return jsonify(list_reading_books(request.args.get('q', ''), request.args.get('offset', 0, type=int)))
+
+
+def list_reading_books(q='', offset=0):
     query = Book.query
-    q = clean_text(request.args.get('q'), 100)
+    q = clean_text(q, 100)
     if q:
         query = query.filter(Book.title.contains(q, autoescape=True) | Book.author.contains(q, autoescape=True))
-    offset = max(0, request.args.get('offset', 0, type=int))
+    offset = max(0, offset)
     rows = query.order_by(Book.id).offset(offset).limit(26).all()
-    return jsonify(ok=True, books=[book_data(b) for b in rows[:25]], next_offset=offset + 25 if len(rows) > 25 else None)
+    return dict(ok=True, books=[book_data(b) for b in rows[:25]], next_offset=offset + 25 if len(rows) > 25 else None)
 
 
 @api.get('/books/<int:book_id>/pages')
 @require_key
 def pages(book_id):
+    return jsonify(list_reading_pages(book_id))
+
+
+def list_reading_pages(book_id):
     book = book_or_error(book_id)
     root = root_id(book)
     if not root or not current_app.config.get('NOTION_TOKEN'):
-        return jsonify(ok=True, pages=[{'id': root or 'local', 'title': book.title, 'depth': 0}])
+        return dict(ok=True, pages=[{'id': root or 'local', 'title': book.title, 'depth': 0}])
     client = SourceClient()
     import notion_sync
     result = [{'id': root, 'title': book.title, 'depth': 0}]
@@ -291,7 +300,7 @@ def pages(book_id):
             elif block.get('has_children') and depth < 2 and block.get('type') in ('column_list', 'column', 'toggle'):
                 walk(block['id'], depth + 1)
     walk(root, 1)
-    return jsonify(ok=True, pages=result)
+    return dict(ok=True, pages=result)
 
 
 @api.get('/books/<int:book_id>/source')
@@ -344,13 +353,17 @@ def find_draft(book_id, page_id, lock=False):
 @api.get('/books/<int:book_id>/draft')
 @require_key
 def read_draft(book_id):
+    return jsonify(get_reading_draft(book_id, request.args.get('page_id')))
+
+
+def get_reading_draft(book_id, page_id=None):
     import notion_sync
     book = book_or_error(book_id)
-    page_id = notion_sync.database_id(request.args.get('page_id')) or root_id(book) or 'local'
+    page_id = notion_sync.database_id(page_id) or root_id(book) or 'local'
     post = find_draft(book_id, page_id)
     if post is None:
-        return jsonify(ok=True, exists=False)
-    return jsonify(**draft_result(post), exists=True, blocks=post.blocks or [], summary=post.summary or '')
+        return dict(ok=True, exists=False)
+    return dict(**draft_result(post), exists=True, blocks=post.blocks or [], summary=post.summary or '')
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -401,6 +414,10 @@ def save_draft(book_id):
     if len(request.get_data(cache=True)) > MAX_BODY:
         raise BridgeError('초안이 너무 큽니다.', 413)
     data = request.get_json(silent=True)
+    return jsonify(save_reading_draft(book_id, data))
+
+
+def save_reading_draft(book_id, data):
     if not isinstance(data, dict):
         raise BridgeError('JSON 형식의 초안이 필요합니다.')
     if set(data) - {'source_token', 'title', 'summary', 'blocks', 'tags', 'cover_asset_id', 'expected_revision'}:
@@ -451,7 +468,7 @@ def save_draft(book_id):
             raise BridgeError('이미 공개했거나 예약한 글입니다. 홈페이지에서 직접 수정해 주세요.', 409)
         if ((post.design or {}).get('_chatgpt_fingerprint') == fingerprint
                 and (post.design or {}).get('_chatgpt_content') == content_digest(post)):
-            return jsonify(**draft_result(post), unchanged=True)
+            return dict(**draft_result(post), unchanged=True)
         if data.get('expected_revision') != revision(post):
             raise BridgeError('기존 초안이 있습니다. getReadingDraft로 최신 revision을 조회하고 수정 내용을 확인한 뒤 다시 보내 주세요.', 409)
     cached = dict((post.design or {}).get('_chatgpt_images', {})) if post else {}
@@ -474,7 +491,7 @@ def save_draft(book_id):
     except IntegrityError:
         db.session.rollback()
         raise BridgeError('다른 요청이 먼저 초안을 저장했습니다. 초안을 조회한 뒤 확인해 주세요.', 409) from None
-    return jsonify(draft_result(post))
+    return draft_result(post)
 
 
 @api.get('/openapi.json')

@@ -366,6 +366,26 @@ def chatgpt():
     return response
 
 
+@admin_bp.route("/mcp/authorize", methods=["GET", "POST"])
+@admin_required
+def mcp_authorize():
+    from mcp_auth import authorize, OAuthError, oauth_error
+    try:
+        response = current_app.make_response(authorize())
+    except OAuthError as error:
+        response = current_app.make_response(oauth_error(error))
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Referrer-Policy"] = "same-origin"
+    return response
+
+
+@admin_bp.post("/mcp/revoke")
+@admin_required
+def mcp_revoke():
+    from mcp_auth import revoke_all
+    return revoke_all()
+
+
 def apply_payload(kind, item, data, action):
     """스튜디오 입력을 검증해 저장한다. action: draft / publish / autosave"""
     if kind == "about":

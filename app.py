@@ -38,6 +38,16 @@ from chatgpt_bridge import api as chatgpt_api  # noqa: E402
 csrf.exempt(chatgpt_api)
 app.register_blueprint(chatgpt_api)
 
+from mcp_auth import routes as mcp_oauth  # noqa: E402
+from mcp_server import routes as reading_mcp  # noqa: E402
+
+# OAuth token exchange and MCP authenticate independently of browser sessions.
+# The owner consent and revocation forms stay under the CSRF-protected admin blueprint.
+csrf.exempt(mcp_oauth)
+csrf.exempt(reading_mcp)
+app.register_blueprint(mcp_oauth)
+app.register_blueprint(reading_mcp)
+
 PAGE_SIZE = 12
 COMMENT_LIMIT = 500
 
