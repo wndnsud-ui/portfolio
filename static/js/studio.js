@@ -1207,7 +1207,19 @@
     $('#stage-options-title').textContent = stage === 'media' ? '꾸미기' : stage === 'details' ? '소개 정보' : single ? '저장' : '공개 설정';
     $('.studio-cols').classList.toggle('has-stage-options', !options.hidden);
     $('#stage-prev').disabled = stage === 'details';
-    $('#stage-next').hidden = stage === 'publish';
+    const nextButton = $('#stage-next');
+    const finalLabel = single ? '저장하기' : meta.published ? '수정 내용 공개' : '발행하기';
+    nextButton.type = stage === 'publish' ? 'submit' : 'button';
+    nextButton.textContent = stage === 'publish' ? finalLabel : '다음 →';
+    if (stage === 'publish') nextButton.dataset.action = 'publish';
+    else delete nextButton.dataset.action;
+    $$('[data-stage-go="publish"]').forEach((button) => {
+      button.dataset.stageLabel ||= button.textContent;
+      button.type = stage === 'publish' ? 'submit' : 'button';
+      button.textContent = stage === 'publish' ? finalLabel : button.dataset.stageLabel;
+      if (stage === 'publish') button.dataset.action = 'publish';
+      else delete button.dataset.action;
+    });
     $('#stage-count').textContent = `${STAGES.indexOf(stage) + 1} / ${STAGES.length}`;
     updateStageLinks();
   }
@@ -1216,9 +1228,15 @@
     if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault(); goStage(link.dataset.stageLink);
   }));
-  $$('[data-stage-go]').forEach((button) => button.addEventListener('click', () => goStage(button.dataset.stageGo)));
+  $$('[data-stage-go]').forEach((button) => button.addEventListener('click', (event) => {
+    if (button.type === 'submit') return;
+    event.preventDefault(); goStage(button.dataset.stageGo);
+  }));
   $('#stage-prev').addEventListener('click', () => goStage(STAGES[STAGES.indexOf(stage) - 1]));
-  $('#stage-next').addEventListener('click', () => goStage(STAGES[STAGES.indexOf(stage) + 1]));
+  $('#stage-next').addEventListener('click', (event) => {
+    if (stage === 'publish') return;
+    event.preventDefault(); goStage(STAGES[STAGES.indexOf(stage) + 1]);
+  });
   window.addEventListener('popstate', () => {
     const next = new URL(location.href).searchParams.get('step');
     if (STAGES.includes(next)) goStage(next, false);

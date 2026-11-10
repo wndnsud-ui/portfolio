@@ -60,11 +60,15 @@ try:
         page.goto(base+'/admin/write?kind=reading&step=details')
         page.locator('.post-title').fill('단계별 새 독서 노트')
         page.locator('#stage-next').click()
-        page.locator('.blk-paragraph [contenteditable]').first.fill('단계를 옮겨도 남는 본문')
+        page.locator('.blk-paragraph [contenteditable]').first.click()
+        page.keyboard.insert_text('단계를 옮겨도 남는 본문')
         page.locator('#stage-next').click();page.locator('#stage-next').click()
         assert '단계를 옮겨도 남는 본문' in page.locator('#canvas').inner_text()
         page.wait_for_function('new URL(location.href).searchParams.has("id")')
         assert parse_qs(urlsplit(page.url).query)['step']==['publish']
+        assert page.locator('#stage-next').get_attribute('type')=='submit'
+        with app.app_context():
+            assert db.session.get(Archive,int(parse_qs(urlsplit(page.url).query)['id'][0])).status=='draft'
         page.go_back();page.wait_for_function('document.querySelector("#studio").dataset.step==="media"')
         page.go_back();page.wait_for_function('document.querySelector("#studio").dataset.step==="content"')
         assert page.locator('.blk-paragraph [contenteditable]').first.inner_text()=='단계를 옮겨도 남는 본문'
@@ -81,6 +85,17 @@ try:
         with app.app_context():
             post=db.session.get(Archive,ids['reading']);assert post.title=='기존 독서 노트'
             assert post.blocks[0]['text']=='수정한 본문';assert post.blocks[1]['caption']=='원본 사진'
+        # Even a toast overlapping the footer must not steal pointer events.
+        page.evaluate('''() => {
+          const toast=document.createElement('div');toast.className='toasts';
+          toast.style.cssText='position:fixed;inset:auto 0 0 auto;width:100%;height:100px;z-index:999';
+          toast.innerHTML='<p class="toast">저장 알림 검증</p>';document.body.append(toast);
+        }''')
+        button=page.locator('#stage-next');button.scroll_into_view_if_needed();box=button.bounding_box()
+        hit=page.evaluate('''([x,y]) => document.elementFromPoint(x,y)?.closest('button')?.id''',[box['x']+box['width']/2,box['y']+box['height']/2])
+        assert hit=='stage-next',hit
+        button.click();assert page.locator('#studio').get_attribute('data-step')=='publish'
+        page.locator('.toasts').evaluate_all('(items)=>items.forEach(el=>el.remove())')
         # Screenshots, PC and mobile, and a published edit must not automatically go live.
         for width,name in [(1440,'desktop'),(390,'mobile')]:
             page.set_viewport_size({'width':width,'height':1000})
@@ -94,7 +109,7 @@ try:
         page.wait_for_timeout(3500)
         with app.app_context():
             post=db.session.get(Archive,ids['published']);assert post.blocks[0]['text']=='공개 원문'
-        page.locator('#publish-pop [data-action="publish"]').click()
+        page.locator('[data-stage-go="publish"]').click()
         page.wait_for_url('**/admin/write?**step=publish')
         with app.app_context():
             post=db.session.get(Archive,ids['published']);assert post.blocks[0]['text']=='아직 공개하지 않은 수정'

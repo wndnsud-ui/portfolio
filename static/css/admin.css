@@ -426,3 +426,8 @@ legend.opt-title + * { clear: both; }
 }
 
 .stage-media-placeholder .text-btn { border: 0; background: none; padding: 0; color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }
+
+/* 저장 알림이 단계 버튼을 가리지 않도록 */
+.studio-page .toasts { pointer-events: none; bottom: 86px; }
+.studio-page .toasts * { pointer-events: none; }
+.writing-bottom { position: relative; z-index: 2; }
