@@ -175,3 +175,15 @@ gpg -d hy-archive-YYYYMMDD.sql.gz.gpg | gunzip | psql "빈_DB_주소"
 - 회귀 검사: `python -m unittest discover -s tests -v` (격리 SQLite와 모의 Notion/Storage 사용, 실제 비밀값 미사용).
 
 공식 설정 안내: https://developers.openai.com/api/docs/actions/getting-started
+
+## 단계별 작성 화면
+
+`/admin/write`는 기본 정보(details) → 본문(content) → 사진·꾸미기(media) → 확인·공개(publish)의 네 단계로 나뉜다.
+각 단계는 `?step=...` 주소를 사용하며 브라우저 앞뒤 이동과 직접 새로고침을 지원한다.
+새 글은 기본 정보부터, 기존 글 수정은 본문부터 열린다. 임시저장 후에도 현재 단계를 유지한다.
+본문에서는 사진·영상 블록을 접어 표시하며 사진 단계에서 원래 순서·캡션을 편집한다.
+공개 단계의 미리보기는 읽기 전용이고, 마지막 발행/저장 버튼을 누르기 전에는 공개 중인 내용을 변경하지 않는다.
+입력 변경은 브라우저에도 바로 보관하며 기존 자동 저장을 유지한다.
+
+브라우저 회귀 검사(Playwright와 Chrome 필요): `python tests/verify_studio_steps.py`.
+임시 DB와 테스트 계정만 사용하며 네 종류×네 단계, 이동·새로고침·자동 저장·사진 보존·모바일 넘침을 확인한다.

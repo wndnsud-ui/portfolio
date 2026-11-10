@@ -379,3 +379,50 @@ legend.opt-title + * { clear: both; }
 .chatgpt-setup label { display: grid; gap: 8px; min-width: 0; font-weight: 700; }
 .chatgpt-setup textarea { resize: vertical; line-height: 1.7; }
 .chatgpt-setup .notice { min-width: 0; overflow-wrap: anywhere; }
+
+/* 단계별 글쓰기 */
+.writing-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 16px 24px; background: var(--card); border-bottom: 1px solid var(--line); }
+.writing-steps a { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 8px 10px; border-radius: 14px; color: var(--muted); font-size: 14px; font-weight: 700; }
+.writing-steps a span { display: grid; place-items: center; width: 26px; height: 26px; flex: none; border: 1px solid var(--line); border-radius: 50%; font-size: 12px; }
+.writing-steps a[aria-current="step"] { background: var(--tint-mint-bg); color: var(--tint-mint-ink); }
+.writing-steps a[aria-current="step"] span { border-color: currentColor; }
+.writing-heading { padding: 20px 28px; background: var(--card); border-bottom: 1px solid var(--line); }
+.writing-heading h1 { font-size: clamp(20px, 2.2vw, 26px); margin: 4px 0 6px; outline: none; }
+.writing-heading p { color: var(--muted); font-size: 14px; }
+#stage-context { font-size: 12px; font-weight: 700; }
+.writing-bottom { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 24px; border-top: 1px solid var(--line); background: var(--card); }
+#stage-count { color: var(--muted); font-size: 13px; }
+.studio [hidden] { display: none !important; }
+.studio-cols.has-stage-options { grid-template-columns: minmax(0, 1fr) 320px; }
+.stage-options { position: static; width: auto; max-height: none; border: 0; border-left: 1px solid var(--line); border-radius: 0; box-shadow: none; overflow-y: auto; }
+.stage-media-editor { display: grid; gap: 20px; min-width: 0; }
+.stage-media-editor h2 { font-size: 19px; }
+.stage-media-item { border-top: 1px solid var(--line); padding: 20px 0; min-width: 0; }
+.stage-media-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.stage-media-item .blk-tools { position: static; display: flex; width: fit-content; margin-top: 12px; }
+.studio[data-step="publish"] .editable { cursor: default; background: none; box-shadow: none; }
+.studio[data-step="publish"] .editable:empty::before { content: none; }
+.studio[data-step="publish"] .blk::before { display: none; }
+.stage-preview-value { display: inline-block; padding: 4px 0; }
+@media (max-width: 1000px) {
+  .studio-cols.has-stage-options { grid-template-columns: minmax(0, 1fr); }
+  .stage-options { position: static; max-height: none; border-left: 0; border-top: 1px solid var(--line); border-radius: 0; }
+}
+@media (max-width: 760px) {
+  .writing-steps { padding: 10px; gap: 2px; }
+  .writing-steps a { flex-direction: column; gap: 5px; padding: 8px 2px; font-size: 11px; }
+  .writing-heading { padding: 16px; }
+  .writing-bottom { padding: 12px 14px; }
+}
+
+.studio:not([data-step="details"]) .kind-tabs { display: none; }
+.studio[data-step="content"] .tb-insert:is([data-insert-type="image"], [data-insert-type="image2"], [data-insert-type="youtube"], [data-insert-type="instagram"]) { display: none; }
+.stage-media-placeholder { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 12px 16px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); font-size: 13px; }
+@media (max-width: 760px) {
+  .studio-top .back { flex: 1; }
+  .studio-top .btn { font-size: 12px; padding-inline: 12px; }
+  .studio-top .kind-tabs { flex-basis: 100%; justify-content: center; }
+  .studio-top .save-state:empty { display: none; }
+}
+
+.stage-media-placeholder .text-btn { border: 0; background: none; padding: 0; color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }

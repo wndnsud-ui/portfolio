@@ -8,11 +8,12 @@
 {% set published = (not is_new) and not single and item.status == 'published' %}
 {% set kind_tint = {'project': 'sky', 'notes': 'mint', 'reading': 'butter', 'about': 'pink'} %}
 <form class="studio" id="studio" method="post" action="{{ url_for('admin.write', kind=kind, id=item.id if item and not single else None) }}"
-      data-kind="{{ kind }}" data-autosave-url="{{ url_for('admin.autosave') }}" data-upload-url="{{ url_for('admin.upload') }}"
+      data-step="{{ writing_step }}" data-kind="{{ kind }}" data-autosave-url="{{ url_for('admin.autosave') }}" data-upload-url="{{ url_for('admin.upload') }}"
       data-book-search-url="{{ url_for('admin.book_search') }}" data-book-cover-url="{{ url_for('admin.book_cover') }}"
       {% if notion_ready %}data-notion-pages-url="{{ url_for('admin.notion_pages') }}" data-notion-blocks-url="{{ url_for('admin.notion_blocks') }}"{% endif %}>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="payload" id="payload">
+  <input type="hidden" name="step" id="writing-step" value="{{ writing_step }}">
   <input type="hidden" name="action" id="action-input" value="draft">
 
   <div class="studio-top">
@@ -28,20 +29,27 @@
     {% elif published %}<span class="state-pill tint-mint"><i></i>공개 중</span>
     {% else %}<span class="state-pill tint-butter"><i></i>임시저장</span>{% endif %}
     <p class="save-state" id="save-state" aria-live="polite"></p>
-    <div class="seg-toggle" role="group" aria-label="미리보기 크기">
+    <div class="seg-toggle" data-review-only role="group" aria-label="미리보기 크기">
       <button type="button" data-view="desktop" aria-pressed="true">데스크톱</button>
       <button type="button" data-view="mobile" aria-pressed="false">모바일</button>
     </div>
     {% if single %}
       <a class="btn btn-sub btn-icon" href="{{ url_for('about') }}" target="_blank" rel="noopener" aria-label="사이트에서 보기">↗</a>
-      <button class="btn btn-sub" type="button" data-pop-toggle aria-expanded="false" aria-controls="publish-pop">설정 ▾</button>
-      <button class="btn btn-primary" type="submit" data-action="publish">저장하기</button>
+      <button class="btn btn-sub" type="button" data-stage-go="media">사진·꾸미기</button>
+      <button class="btn btn-primary" type="button" data-stage-go="publish">확인·저장 →</button>
     {% else %}
       {% if not is_new %}<a class="btn btn-sub btn-icon" href="{{ project_url(item) if kind == 'project' else post_url(item) }}" target="_blank" rel="noopener" aria-label="사이트에서 보기">↗</a>{% endif %}
       <button class="btn btn-sub" type="submit" data-action="draft">{{ '비공개로 돌리기' if published else '임시저장' }}</button>
-      <button class="btn btn-primary" type="button" data-pop-toggle aria-expanded="false" aria-controls="publish-pop">{{ '수정 발행' if published else '발행' }} ▾</button>
+      <button class="btn btn-primary" type="button" data-stage-go="publish">확인·공개 →</button>
     {% endif %}
   </div>
+
+  <nav class="writing-steps" aria-label="작성 단계">
+    {% for value, label in [('details', '기본 정보'), ('content', '본문 쓰기'), ('media', '사진·꾸미기'), ('publish', '확인·공개' if not single else '확인·저장')] %}
+    <a href="{{ url_for('admin.write', kind=kind, id=item.id if item and not single else None, step=value) }}" data-stage-link="{{ value }}"{% if writing_step == value %} aria-current="step"{% endif %}><span>{{ loop.index }}</span>{{ label }}</a>
+    {% endfor %}
+  </nav>
+  <header class="writing-heading"><div><p id="stage-context"></p><h1 id="stage-title" tabindex="-1"></h1><p id="stage-description"></p></div></header>
 
   <div class="editor-bar" id="editor-bar" role="toolbar" aria-label="넣기와 글자 꾸미기"></div>
 
@@ -50,11 +58,11 @@
       <div class="canvas-frame" id="canvas-frame"><div class="canvas" id="canvas"></div></div>
     </section>
 
-    <aside class="publish-pop" id="publish-pop" hidden aria-label="{{ '설정' if single else '발행 설정' }}">
-      <div class="pop-head"><strong>{{ '설정' if single else '발행 설정' }}</strong><button class="icon-btn" type="button" data-pop-close aria-label="닫기">✕</button></div>
+    <aside class="publish-pop stage-options" id="publish-pop" hidden aria-label="{{ '설정' if single else '발행 설정' }}">
+      <div class="pop-head"><strong id="stage-options-title">발행 설정</strong></div>
 
       {% if not single %}
-      <div class="opt-block opt-publish">
+      <div class="opt-block opt-publish" data-stage-option="publish">
         <p class="opt-title">분류 · 태그</p>
         {% if kind == 'notes' %}
         <label for="f-category">분류</label>
@@ -83,7 +91,14 @@
       {% endif %}
 
       {% if not single %}
-      <fieldset class="opt-block">
+      {% if not single %}<div class="opt-block" data-stage-option="media"><p class="opt-title">커버 이미지</p>
+        <label for="f-cover">커버 이미지</label>
+        <div class="file-field" data-upload-target="cover_image">
+          <input class="input" id="f-cover" data-bind="cover_image" placeholder="https://… 또는 파일 올리기">
+          <label class="btn btn-sub btn-sm">올리기<input type="file" accept="image/*" hidden></label>
+        </div>
+      </div>{% endif %}
+      <fieldset class="opt-block" data-stage-option="media">
         <legend class="opt-title">커버</legend>
         <div class="cover-opts">
           {% for value, text in DESIGN_OPTIONS.cover %}
@@ -93,7 +108,7 @@
       </fieldset>
       {% endif %}
 
-      <fieldset class="opt-block">
+      <fieldset class="opt-block" data-stage-option="media">
         <legend class="opt-title">포인트 색</legend>
         <div class="swatches">
           {% for value, text in DESIGN_OPTIONS.accent %}
@@ -103,22 +118,17 @@
         <p class="hint">분류 칩, 강조 상자, 커버에 쓰여요.</p>
       </fieldset>
 
-      <fieldset class="opt-block">
+      <fieldset class="opt-block" data-stage-option="media">
         <legend class="opt-title">본문 폭 · 글자 크기</legend>
         <div class="seg seg-2">{% for value, text in DESIGN_OPTIONS.width %}<label><input type="radio" name="design-width" value="{{ value }}" data-design="width"><span>{{ text }}</span></label>{% endfor %}</div>
         <div class="seg seg-3">{% for value, text in DESIGN_OPTIONS.size %}<label><input type="radio" name="design-size" value="{{ value }}" data-design="size"><span>{{ text }}</span></label>{% endfor %}</div>
       </fieldset>
 
       {% if not single %}
-      <details class="opt-block opt-more">
+      <details class="opt-block opt-more" data-stage-option="publish">
         <summary>더 보기 · 주소와 링크</summary>
         <label for="f-slug">주소</label>
         <div class="slug-field"><span>/{{ 'projects' if kind == 'project' else 'notes' }}/</span><input id="f-slug" data-bind="slug" placeholder="제목에서 자동"></div>
-        <label for="f-cover">커버 이미지</label>
-        <div class="file-field" data-upload-target="cover_image">
-          <input class="input" id="f-cover" data-bind="cover_image" placeholder="https://… 또는 파일 올리기">
-          <label class="btn btn-sub btn-sm">올리기<input type="file" accept="image/*" hidden></label>
-        </div>
         {% if kind == 'project' %}
         <label for="f-demo">서비스 주소</label>
         <input class="input" id="f-demo" data-bind="project.demo_url" placeholder="https://">
@@ -131,7 +141,7 @@
       </details>
 
       {% if not is_new %}
-      <details class="opt-block opt-more danger-zone">
+      <details class="opt-block opt-more danger-zone" data-stage-option="publish">
         <summary>삭제</summary>
         <p class="hint">지우면 되돌릴 수 없어요. 잠시 내리려면 「{{ '비공개로 돌리기' if published else '임시저장' }}」을 쓰세요.</p>
         <button class="btn btn-sub btn-sm danger" type="submit" form="delete-form">이 {{ KINDS[kind].label }} 삭제</button>
@@ -139,7 +149,7 @@
       {% endif %}
 
       {% else %}
-      <div class="opt-block">
+      <div class="opt-block" data-stage-option="details">
         <p class="opt-title">연락처 · 파일</p>
         <label class="check-row" for="a-seek"><span>「새로운 일을 찾고 있어요」 배지</span><input id="a-seek" type="checkbox" data-bind="about.seeking"></label>
         <label for="a-email">이메일</label><input class="input" id="a-email" type="email" data-bind="about.email">
@@ -156,7 +166,7 @@
           <label class="btn btn-sub btn-sm">올리기<input type="file" accept="application/pdf" hidden></label>
         </div>
       </div>
-      <div class="opt-block">
+      <div class="opt-block" data-stage-option="details">
         <p class="opt-title">홈 문구</p>
         <label for="a-headline">대표 문장 <small>==단어== 는 형광펜</small></label>
         <textarea class="input" id="a-headline" rows="2" data-bind="about.headline"></textarea>
@@ -172,12 +182,13 @@
         {% endfor %}
       </div>
       {% endif %}
-      <div class="pop-foot">
+      <div class="pop-foot" data-stage-option="publish">
         {% if single %}<button class="btn btn-primary" type="submit" data-action="publish">저장하기</button>
         {% else %}<button class="btn btn-primary" type="submit" data-action="publish">{{ '고친 내용 공개' if published else '✓ 발행' }}</button>{% endif %}
       </div>
     </aside>
   </div>
+  <div class="writing-bottom"><button class="btn btn-sub" type="button" id="stage-prev">← 이전</button><span id="stage-count" aria-live="polite"></span><button class="btn btn-primary" type="button" id="stage-next">다음 →</button></div>
 </form>
 {% if not is_new and not single %}
 <form id="delete-form" method="post" action="{{ url_for('admin.delete', kind=kind, item_id=item.id) }}" data-confirm>

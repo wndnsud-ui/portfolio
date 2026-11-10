@@ -439,6 +439,9 @@ def write():
     item = load_item(kind, item_id)
     if item is not None and kind in POST_KINDS + ("notes",) and edit_kind(item) != kind:
         return redirect(url_for("admin.write", kind=edit_kind(item), id=item.id))
+    writing_step = request.values.get("step", "details" if item is None else "content")
+    if writing_step not in ("details", "content", "media", "publish"):
+        writing_step = "details"
     if request.method == "POST":
         action = request.form.get("action", "draft")
         try:
@@ -453,7 +456,7 @@ def write():
             flash("공개 예약했어요." if item.is_scheduled else "공개했어요.", "success")
         else:
             flash("임시저장했어요. 방문자에게는 아직 안 보여요.", "success")
-        return redirect(url_for("admin.write", kind=kind, id=item.id))
+        return redirect(url_for("admin.write", kind=kind, id=item.id, step=writing_step))
     if kind in SINGLE_KINDS:
         db.session.commit()
     books = Book.query.order_by(Book.title).all() if kind == "reading" else []
@@ -463,7 +466,7 @@ def write():
                    "notion": bool(b.notion_page_id)} for b in books]
     notion_ready = bool(current_app.config.get("NOTION_TOKEN"))
     return render_template("admin/studio.html", kind=kind, item=item, payload=item_payload(kind, item), books=books_json, notion_ready=notion_ready,
-                           note_categories=NOTES_CATEGORIES, life_categories=LIFE_CATEGORIES)
+                           note_categories=NOTES_CATEGORIES, life_categories=LIFE_CATEGORIES, writing_step=writing_step)
 
 
 @admin_bp.post("/api/autosave")

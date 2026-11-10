@@ -449,7 +449,7 @@
 
   function buildToolbar() {
     if (!bar) return;
-    const insert = (type, label, action) => h('button', { type: 'button', class: 'tb-insert', title: label, ...keep(action || (() => insertBlock(type))) }, svg(type), h('span', {}, label));
+    const insert = (type, label, action) => h('button', { type: 'button', class: 'tb-insert', 'data-insert-type': type, title: label, ...keep(action || (() => insertBlock(type))) }, svg(type), h('span', {}, label));
     const inserts = h('div', { class: 'tb-row tb-inserts' },
       insert('image', '사진', () => photoInput.click()),
       insert('image2', '사진 2장'),
@@ -928,16 +928,16 @@
     chips.textContent = list.length ? list.join(' · ') : '오른쪽 「기술」 칸에 입력';
   }
 
-  function render() {
+  function renderAll() {
     const d = state.design;
     if (kind === 'about') {
-      const head = h('header', { class: 'resume-head' },
+      const head = h('header', { class: 'resume-head', 'data-stage-part': 'details' },
         h('span', { class: 'avatar avatar-lg avatar-edit' }, imageOrDrop(getPath('about.photo'), '사진', setCover, { compact: true })),
         h('div', { class: 'resume-who' },
           editable('h1', '', { path: 'about.name', placeholder: '이름', single: true }),
           editable('p', '', { path: 'about.tagline', placeholder: '업무운영 · 데이터 · AI 서비스 기획', single: true })));
-      const article = h('article', { class: `resume ${designClass()}` }, head, aboutSections(),
-        h('section', { class: 'resume-sec' }, h('h2', { class: 'r-title' }, '더 적고 싶은 것 (선택)'),
+      const article = h('article', { class: `resume ${designClass()}` }, head, h('div', { 'data-stage-part': 'content' }, aboutSections()),
+        h('section', { class: 'resume-sec', 'data-stage-part': 'content' }, h('h2', { class: 'r-title' }, '더 적고 싶은 것 (선택)'),
           h('div', { class: 'post-body' }, state.blocks.map(blockWrap)), addBlockMenu()));
       canvas.replaceChildren(article);
     activeRich = null;
@@ -947,20 +947,20 @@
     crumbsEl = h('p', { class: 'crumbs' });
     readTimeEl = h('span');
     chipEl = h('span', { class: 'chip' });
-    const header = h('header', { class: 'post-header' },
+    const header = h('header', { class: 'post-header', 'data-stage-part': 'details' },
       h('p', { class: 'chip-wrap' }, chipEl),
       editable('h1', 'post-title', { path: 'title', placeholder: '제목', single: true }),
       editable('p', 'post-summary', { path: kind === 'project' ? 'project.subtitle' : 'summary', placeholder: kind === 'project' ? '한 줄 소개' : '요약 — 목록과 검색 결과에 보여요' }),
       kind !== 'project' ? h('p', { class: 'post-meta' }, h('time', {}, new Date().toLocaleDateString('ko-KR')), readTimeEl) : null);
     const article = h('article', { class: designClass() },
       crumbsEl,
-      d.cover === 'large' ? h('figure', { class: 'post-hero' }, coverSlot()) : null,
+      d.cover === 'large' ? h('figure', { class: 'post-hero', 'data-stage-part': 'preview' }, coverSlot()) : null,
       header,
-      kind === 'project' ? projectFields() : null,
-      kind === 'reading' ? bookEditor() : null,
-      kind === 'project' ? projectCase() : null,
-      h('div', { class: 'post-body' }, state.blocks.map(blockWrap)),
-      addBlockMenu());
+      kind === 'project' ? h('div', { 'data-stage-part': 'details' }, projectFields()) : null,
+      kind === 'reading' ? h('div', { 'data-stage-part': 'details' }, bookEditor()) : null,
+      kind === 'project' ? h('div', { 'data-stage-part': 'content' }, projectCase()) : null,
+      h('div', { class: 'post-body', 'data-stage-part': 'content' }, state.blocks.map(blockWrap)),
+      h('div', { 'data-stage-part': 'content', 'data-add-menu': '' }, addBlockMenu()));
     canvas.replaceChildren(article);
     activeRich = null;
     restoreFocus();
@@ -1027,6 +1027,7 @@
 
   function changed() {
     dirty = true;
+    try { localStorage.setItem(localKey(), JSON.stringify({ at: Date.now(), state })); } catch (error) { /* private mode */ }
     showState('쓰는 중…', 'busy');
     clearTimeout(timer);
     timer = setTimeout(autosave, AUTOSAVE_MS);
@@ -1049,8 +1050,9 @@
       if (!result.ok) throw new Error(result.error);
       if (!state.id) {
         state.id = result.id;
-        form.action = result.edit_url;
-        history.replaceState(null, '', result.edit_url);
+        form.setAttribute('action', result.edit_url);
+        history.replaceState(null, '', stageURL(stage, result.edit_url));
+        updateStageLinks();
       }
       showState(`자동 저장됨 · ${result.saved_at}`, 'ok');
     }).catch(() => {
@@ -1071,6 +1073,7 @@
     if (pending) await pending;
     if (!(state.title || '').trim() && !single) {
       showState('제목을 적어 주세요', 'error');
+      goStage('details');
       $('.post-title', canvas)?.focus();
       return;
     }
@@ -1113,21 +1116,114 @@
     if (!event.target.closest('.add-wrap')) $$('.add-menu', canvas).forEach((menu) => { menu.hidden = true; });
   });
 
-  // ------------------------------------------------------------ 발행 창
-  const pop = $('#publish-pop');
-  const popToggles = $$('[data-pop-toggle]');
-  const setPop = (open) => {
-    if (!pop) return;
-    pop.hidden = !open;
-    popToggles.forEach((b) => b.setAttribute('aria-expanded', String(open)));
-    if (open) pop.querySelector('input, select, button')?.focus({ preventScroll: true });
+  // ------------------------------------------------------------ 단계별 작성 페이지
+  const STAGES = ['details', 'content', 'media', 'publish'];
+  let stage = STAGES.includes(new URL(location.href).searchParams.get('step'))
+    ? new URL(location.href).searchParams.get('step') : (form.dataset.step || 'details');
+  const descriptions = {
+    details: ['기본 정보부터 적어주세요', kind === 'reading' ? '책과 글 제목을 정하세요. 독서 내용은 다음 페이지에서 적습니다.' : '이 글을 알아볼 제목과 기본 정보를 적습니다.'],
+    content: ['지금은 내용에만 집중하세요', '문단을 쓰고, 필요한 소제목과 인용을 넣으세요. 사진과 공개 설정은 다음 단계에 있습니다.'],
+    media: ['사진과 분위기를 정하세요', '커버와 본문 사진을 따로 정리하세요. 글은 마지막 페이지에서 한 번에 확인할 수 있습니다.'],
+    publish: ['공개하기 전에 확인하세요', single ? '수정한 소개를 확인하고 저장하세요.' : '본문을 확인하고 분류·태그·공개 시점을 정하세요. 아래 버튼을 눌러야 발행됩니다.'],
   };
-  popToggles.forEach((b) => b.addEventListener('click', () => setPop(pop.hidden)));
-  $$('[data-pop-close]').forEach((b) => b.addEventListener('click', () => setPop(false)));
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && pop && !pop.hidden) { setPop(false); popToggles[0]?.focus(); } });
-  document.addEventListener('mousedown', (e) => {
-    if (pop && !pop.hidden && !e.target.closest('#publish-pop') && !e.target.closest('[data-pop-toggle]')) setPop(false);
+
+  function stageURL(value, base = form.getAttribute('action')) {
+    const url = new URL(base, location.href);
+    url.searchParams.set('step', value);
+    return url.pathname + url.search + url.hash;
+  }
+
+  function updateStageLinks() {
+    $$('[data-stage-link]').forEach((link) => {
+      link.href = stageURL(link.dataset.stageLink);
+      if (link.dataset.stageLink === stage) link.setAttribute('aria-current', 'step');
+      else link.removeAttribute('aria-current');
+    });
+  }
+
+  function goStage(value, push = true) {
+    if (!STAGES.includes(value)) return;
+    stage = value;
+    selected = -1;
+    render();
+    if (push) history.pushState(null, '', stageURL(stage));
+    $('#studio .studio-center')?.scrollTo(0, 0);
+    $('#stage-title')?.focus({ preventScroll: true });
+  }
+
+  function mediaEditor() {
+    const images = state.blocks.map((block, index) => ({ block, index })).filter(({ block }) => ['image', 'image2', 'youtube', 'instagram'].includes(block.type));
+    return h('section', { class: 'stage-media-editor' },
+      h('h2', {}, single ? '프로필 사진' : '커버 이미지'),
+      coverSlot(),
+      h('p', { class: 'hint' }, single ? '프로필에 사용할 사진을 골라주세요.' : '위 사진은 글의 커버입니다. 본문에 넣을 사진은 아래에서 추가하세요.'),
+      h('h2', {}, '본문 사진·영상'),
+      images.length ? images.map(({ block, index }) => h('section', { class: 'stage-media-item' }, h('p', { class: 'hint' }, `본문 ${index + 1}번째 블록 · ${meta.blockTypes[block.type]}`), blockWrap(block, index))) : h('p', { class: 'hint' }, '아직 본문 사진이 없습니다. 사진 없이도 다음 단계로 갈 수 있어요.'),
+      h('div', { class: 'stage-media-actions' },
+        h('button', { type: 'button', class: 'btn btn-sub', onclick: () => insertBlock('image', state.blocks.length, false) }, '＋ 본문 사진'),
+        h('button', { type: 'button', class: 'btn btn-sub', onclick: () => insertBlock('image2', state.blocks.length, false) }, '＋ 사진 2장'),
+        h('button', { type: 'button', class: 'btn btn-sub', onclick: () => insertBlock('youtube', state.blocks.length, false) }, '＋ 동영상'),
+        h('button', { type: 'button', class: 'btn btn-sub', onclick: () => insertBlock('instagram', state.blocks.length, false) }, '＋ 인스타')));
+  }
+
+  function readOnlyPreview(article) {
+    $$('.blk-tools, .add-wrap, .book-search, [data-add-menu]', article).forEach((el) => el.remove());
+    $$('[contenteditable]', article).forEach((el) => { el.contentEditable = 'false'; el.removeAttribute('role'); });
+    $$('input, select, textarea', article).forEach((input) => {
+      if (input.type === 'file' || input.type === 'hidden') { input.remove(); return; }
+      const value = input.tagName === 'SELECT' ? input.selectedOptions[0]?.textContent : input.value;
+      input.replaceWith(h('span', { class: 'stage-preview-value' }, value || '—'));
+    });
+    $$('.drop-actions, .empty-drop, .dropzone, .img-slot-tools', article).forEach((el) => el.remove());
+    $$('button', article).forEach((button) => { button.disabled = true; button.tabIndex = -1; });
+  }
+
+  function render() {
+    renderAll();
+    const article = $('article', canvas);
+    if (!article) return;
+    if (stage !== 'publish') {
+      $$('[data-stage-part]', article).forEach((part) => { if (part.dataset.stagePart !== stage) part.remove(); });
+      $('.crumbs', article)?.remove();
+      if (stage === 'media') article.append(mediaEditor());
+      if (stage === 'content') {
+        $$('.blk-image, .blk-image2, .blk-youtube, .blk-instagram', article).forEach((block) => {
+          block.replaceChildren(h('div', { class: 'stage-media-placeholder' },
+            h('span', {}, '사진·영상 블록'),
+            h('button', { type: 'button', class: 'text-btn', onclick: () => goStage('media') }, '사진 단계에서 보기 →')));
+        });
+      }
+    } else readOnlyPreview(article);
+    form.dataset.step = stage;
+    $('#writing-step').value = stage;
+    $('#stage-title').textContent = descriptions[stage][0];
+    $('#stage-description').textContent = descriptions[stage][1];
+    $('#stage-context').textContent = single ? '소개 페이지' : (state.title || '새 글');
+    $('#editor-bar').hidden = stage !== 'content';
+    $$('[data-review-only]').forEach((el) => { el.hidden = stage !== 'publish'; });
+    const options = $('#publish-pop');
+    $$('[data-stage-option]', options).forEach((part) => { part.hidden = part.dataset.stageOption !== stage; });
+    options.hidden = !(stage === 'media' || stage === 'publish' || (single && stage === 'details'));
+    $('#stage-options-title').textContent = stage === 'media' ? '꾸미기' : stage === 'details' ? '소개 정보' : single ? '저장' : '공개 설정';
+    $('.studio-cols').classList.toggle('has-stage-options', !options.hidden);
+    $('#stage-prev').disabled = stage === 'details';
+    $('#stage-next').hidden = stage === 'publish';
+    $('#stage-count').textContent = `${STAGES.indexOf(stage) + 1} / ${STAGES.length}`;
+    updateStageLinks();
+  }
+
+  $$('[data-stage-link]').forEach((link) => link.addEventListener('click', (event) => {
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault(); goStage(link.dataset.stageLink);
+  }));
+  $$('[data-stage-go]').forEach((button) => button.addEventListener('click', () => goStage(button.dataset.stageGo)));
+  $('#stage-prev').addEventListener('click', () => goStage(STAGES[STAGES.indexOf(stage) - 1]));
+  $('#stage-next').addEventListener('click', () => goStage(STAGES[STAGES.indexOf(stage) + 1]));
+  window.addEventListener('popstate', () => {
+    const next = new URL(location.href).searchParams.get('step');
+    if (STAGES.includes(next)) goStage(next, false);
   });
+  history.replaceState(null, '', stageURL(stage, location.href));
 
   buildToolbar();
   syncInputs();
