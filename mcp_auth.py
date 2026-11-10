@@ -64,16 +64,40 @@ def refresh_signer():
     return URLSafeTimedSerializer(current_app.secret_key, salt='hy-mcp-refresh-v1')
 
 
+def loopback_redirect(value):
+    try:
+        p = urlsplit(value)
+        return (p.scheme == 'http' and p.hostname == '127.0.0.1' and not p.username and not p.password
+                and not p.query and not p.fragment and (p.port is None or 1 <= p.port <= 65535)
+                and re.fullmatch(r'/callback(?:/[A-Za-z0-9_-]+)?', p.path) is not None)
+    except (ValueError, TypeError):
+        return False
+
+
 def allowed_redirect(value):
     if not isinstance(value, str) or len(value) > 2048:
         return False
     try:
         p = urlsplit(value)
-        return (p.scheme == 'https' and p.netloc == 'chatgpt.com' and not p.fragment
-                and (p.path == '/connector_platform_oauth_redirect'
-                     or re.fullmatch(r'/connector/oauth/[A-Za-z0-9_-]+', p.path) is not None))
+        return (loopback_redirect(value) or
+                (p.scheme == 'https' and p.netloc == 'chatgpt.com' and not p.fragment
+                 and (p.path == '/connector_platform_oauth_redirect'
+                      or re.fullmatch(r'/connector/oauth/[A-Za-z0-9_-]+', p.path) is not None)))
     except ValueError:
         return False
+
+
+def redirect_matches(value, registered):
+    if not allowed_redirect(value):
+        return False
+    for candidate in registered:
+        if value == candidate:
+            return True
+        # RFC 8252: native clients choose their loopback listener port at login.
+        if loopback_redirect(value) and loopback_redirect(candidate):
+            if urlsplit(value).path == urlsplit(candidate).path:
+                return True
+    return False
 
 
 def client_metadata(client_id):
@@ -153,7 +177,7 @@ def register():
         raise OAuthError('invalid_client_metadata', 'JSON 클라이언트 설정이 필요합니다.')
     urls = body.get('redirect_uris')
     if not isinstance(urls, list) or not 1 <= len(urls) <= 4 or not all(allowed_redirect(u) for u in urls):
-        raise OAuthError('invalid_redirect_uri', 'ChatGPT의 공식 OAuth 콜백 주소만 등록할 수 있습니다.')
+        raise OAuthError('invalid_redirect_uri', 'ChatGPT 공식 콜백 또는 Codex 로컬 콜백 주소만 등록할 수 있습니다.')
     if body.get('token_endpoint_auth_method', 'none') != 'none':
         raise OAuthError('invalid_client_metadata', 'S256 PKCE를 사용하는 공개 클라이언트만 지원합니다.')
     grants = body.get('grant_types', ['authorization_code', 'refresh_token'])
@@ -174,7 +198,7 @@ def authorization_request():
     client_id = values.get('client_id', '')
     client = client_metadata(client_id)
     redirect_uri = values.get('redirect_uri', '')
-    if redirect_uri not in client['redirect_uris'] or not allowed_redirect(redirect_uri):
+    if not redirect_matches(redirect_uri, client['redirect_uris']):
         raise OAuthError('invalid_request', '등록한 콜백 주소와 일치하지 않습니다.')
     if values.get('response_type') != 'code' or values.get('code_challenge_method') != 'S256':
         raise OAuthError('invalid_request', 'authorization code와 S256 PKCE가 필요합니다.')

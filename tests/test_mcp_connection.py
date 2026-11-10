@@ -108,6 +108,18 @@ class MCPConnectionTests(unittest.TestCase):
         self.assertEqual(self.client.post('/oauth/register',json={'redirect_uris':[self.redirect],'scope':'publish delete'}).status_code,400)
         self.assertEqual(self.client.post('/oauth/register',json={'redirect_uris':[self.redirect],'token_endpoint_auth_method':'client_secret_post'}).status_code,400)
 
+    def test_codex_loopback_callback_and_pkce_with_dynamic_port(self):
+        self.redirect='http://127.0.0.1/callback'
+        self.client_id=self.register()
+        self.redirect='http://127.0.0.1:51891/callback'
+        token=self.tokens()['access_token']
+        self.assertEqual(self.call('listReadingBooks',token=token).status_code,200)
+        self.assertFalse(oauth.redirect_matches('http://127.0.0.1:51891/callback/other', ['http://127.0.0.1/callback']))
+        for invalid in ['http://localhost/callback','http://127.0.0.1.evil.example/callback',
+                        'http://127.0.0.1@evil.example/callback','http://127.0.0.1/callback?next=https://evil.example',
+                        'http://127.0.0.1/admin','http://192.168.1.2/callback','http://127.0.0.1:99999/callback']:
+            self.assertFalse(oauth.allowed_redirect(invalid),invalid)
+
     def test_authorization_requires_owner_login_and_csrf(self):
         r=self.client.get(self.authorization_url());self.assertEqual(r.status_code,303);self.assertIn('/admin/login',r.location)
         with self.client.session_transaction() as s:s['admin']=True
