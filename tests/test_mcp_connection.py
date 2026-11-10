@@ -151,6 +151,10 @@ class MCPConnectionTests(unittest.TestCase):
             r=self.call('listReadingBooks',token=token);self.assertEqual(r.status_code,401)
             self.assertIn('resource_metadata=',r.headers['WWW-Authenticate'])
             self.assertIn('mcp/www_authenticate',r.json['result']['_meta'])
+            challenge=r.json['result']['_meta']['mcp/www_authenticate'][0]
+            self.assertIn('error="invalid_token"',challenge)
+            self.assertIn('error_description=',challenge)
+            self.assertEqual(challenge,r.headers['WWW-Authenticate'])
         with self.client.session_transaction() as s:s['admin']=True
         self.assertEqual(self.call('listReadingBooks').status_code,401)
 
@@ -159,6 +163,7 @@ class MCPConnectionTests(unittest.TestCase):
         self.assertEqual({t['name'] for t in tools},set(server.TOOL_SCOPES))
         self.assertFalse(any('publish' in t['name'].lower() or 'delete' in t['name'].lower() for t in tools))
         self.assertTrue(all(t['securitySchemes'][0]['type']=='oauth2' for t in tools))
+        self.assertTrue(all(t['_meta']['securitySchemes']==t['securitySchemes'] for t in tools))
 
     def test_full_workflow_book_source_existing_draft_save_without_proxy(self):
         token=self.tokens()['access_token']

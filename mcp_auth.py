@@ -48,8 +48,12 @@ def resource():
     return origin() + '/mcp'
 
 
-def challenge():
-    return f'Bearer resource_metadata="{origin()}/.well-known/oauth-protected-resource/mcp", scope="{" ".join(SCOPES)}"'
+def challenge(error='invalid_token'):
+    # ChatGPT requires error details in the tool-level challenge to open linking UI.
+    code = 'insufficient_scope' if error == 'insufficient_scope' else 'invalid_token'
+    return (f'Bearer resource_metadata="{origin()}/.well-known/oauth-protected-resource/mcp", '
+            f'scope="{" ".join(SCOPES)}", error="{code}", '
+            'error_description="Sign in to HY ARCHIVE and approve the required permissions"')
 
 
 def client_signer():

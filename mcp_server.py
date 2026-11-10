@@ -42,6 +42,7 @@ def tools():
             scope = TOOL_SCOPES[name]
             definitions.append({'name': name, 'title': operation['summary'], 'description': operation['description'],
                                 'inputSchema': schema, 'securitySchemes': [{'type': 'oauth2', 'scopes': [scope]}],
+                                '_meta': {'securitySchemes': [{'type': 'oauth2', 'scopes': [scope]}]},
                                 'annotations': {'readOnlyHint': method == 'get', 'destructiveHint': False,
                                                 'idempotentHint': True, 'openWorldHint': False}})
     return definitions
@@ -82,14 +83,14 @@ def rpc_result(identifier, result):
     return jsonify(jsonrpc='2.0', id=identifier, result=result)
 
 
-def tool_error(identifier, message, status=200, auth=False):
+def tool_error(identifier, message, status=200, auth=False, auth_error='invalid_token'):
     value = {'content': [{'type': 'text', 'text': message}], 'isError': True}
     if auth:
-        value['_meta'] = {'mcp/www_authenticate': [oauth.challenge()]}
+        value['_meta'] = {'mcp/www_authenticate': [oauth.challenge(auth_error)]}
     response = jsonify(jsonrpc='2.0', id=identifier, result=value)
     response.status_code = status
     if auth:
-        response.headers['WWW-Authenticate'] = oauth.challenge()
+        response.headers['WWW-Authenticate'] = oauth.challenge(auth_error)
     return response
 
 
@@ -153,7 +154,7 @@ def mcp():
                                        'structuredContent': result, 'isError': False})
     except oauth.OAuthError as error:
         db.session.rollback()
-        return tool_error(identifier, error.description, error.status, auth=True)
+        return tool_error(identifier, error.description, error.status, auth=True, auth_error=error.error)
     except reading.BridgeError as error:
         db.session.rollback()
         return tool_error(identifier, str(error))
