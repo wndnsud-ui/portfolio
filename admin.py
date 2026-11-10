@@ -361,7 +361,8 @@ def chatgpt():
     from chatgpt_bridge import manage
     response = current_app.make_response(manage())
     response.headers["Cache-Control"] = "no-store"
-    response.headers["Referrer-Policy"] = "no-referrer"
+    # Flask-WTF requires the same-origin Referer on HTTPS form submissions.
+    response.headers["Referrer-Policy"] = "same-origin"
     return response
 
 
