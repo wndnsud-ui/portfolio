@@ -59,6 +59,12 @@
           <td data-label="수정일" class="mono">{{ r.updated|date }}</td>
           <td class="row-actions">
             <a class="btn btn-sub btn-sm" href="{{ edit }}">수정</a>
+            {% if r.kind not in SINGLE_KINDS %}
+            <form method="post" action="{{ url_for('admin.delete', kind=r.kind, item_id=r.id, back_kind=kind or None) }}" data-confirm>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sub btn-sm danger" type="submit" aria-label="「{{ r.title }}」 삭제">삭제</button>
+            </form>
+            {% endif %}
             <a class="icon-link" href="{{ url_for('about') if r.kind == 'about' else (project_url(r.item) if r.kind == 'project' else post_url(r.item)) }}" target="_blank" rel="noopener" aria-label="「{{ r.title }}」 사이트에서 보기">↗</a>
           </td>
         </tr>
